@@ -1,5 +1,6 @@
 package es.upm.dit.dscc.DHT;
 
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -13,6 +14,8 @@ import java.util.logging.Handler;
 import java.util.logging.Level;
 import java.util.logging.LogRecord;
 import java.util.logging.Logger;
+
+import org.apache.zookeeper.data.Stat;
 
 public class DHTOperations implements DHTUserInterface {
 
@@ -38,33 +41,21 @@ public class DHTOperations implements DHTUserInterface {
 		LOGGER.finest("PUT: Is invoked");
 		int value;
 	
-	
 		// Create the array of nodes where map should be stored
 		int nodes[] = tableManager.getNodes(map.getKey());
 		
-		for (int i = 1; i < nodes.length; i++) {
-			if (tableManager.isDHTLocalReplica(nodes[i], map.getKey())) {
-				LOGGER.fine("PUT: Local replica");
-				value = putLocal(map);
-			} else {
-				LOGGER.fine("PUT: Remote replica");
-				//TODO
-				//sendMessages.sendPut(tableManager.DHTAddress(nodes[i]), map, true); 			
-			}
-		}
 		
-		if (tableManager.isDHTLocal(nodes[0])) {
-			LOGGER.finest("PUT: The operation is local");
-			value = putLocal(map);
-		} else {
-			//TODO
-			//sendMessages.sendPut(tableManager.DHTAddress(nodes[0]), map, false);
-			operation = mutex.sendOperation();
-			LOGGER.finest("Returned value in put: " + operation.getValue());
-			return operation.getValue();
-		}
-
-		return 0;
+		//TODO: Serializar datos de operacion (put map) y nodos que deben hacerla y meterla en zkOp
+		byte[] data = serialize(nodes);
+		
+		zkOperation op = new zkOperation();
+		
+		//Cuando se borre la operacion porque ya ha terminado de ejecutarse, 
+		// deberá saltar un watcher que notifique a este mutex para responder al cliente
+		
+		operation = mutex.sendOperation();
+		LOGGER.finest("Returned value in put: " + operation.getValue());
+		return operation.getValue();
 	}
 	
 
@@ -209,6 +200,18 @@ public class DHTOperations implements DHTUserInterface {
 	@Override
 	public Integer putMsg(DHT_Map map) {
 		// TODO Auto-generated method stub
+		return null;
+	}
+	
+		
+	private byte[] serialize(Object o) {
+		//TODO: Serializamos el objeto o (operacion, nodos, etc)
+		try {
+			return new byte[4];
+		} catch (Exception e) {
+			System.out.println("Error: Incremento del contador erroneo");
+			System.out.println("Exception: " + e);
+		}
 		return null;
 	}
 
