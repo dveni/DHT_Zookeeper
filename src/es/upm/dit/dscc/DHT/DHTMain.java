@@ -29,7 +29,6 @@ public class DHTMain {
 	static final Logger LOGGER = Logger.getLogger(DHTMain.class.getName());
 
 	public DHTMain() {
-		// TODO Auto-generated constructor stub
 		configureLogger();
 	}
 
@@ -38,9 +37,9 @@ public class DHTMain {
 	public void configureLogger() {
 		ConsoleHandler handler;
 		handler = new ConsoleHandler(); 
-		handler.setLevel(Level.FINE); 
+		handler.setLevel(Level.FINEST); 
 		LOGGER.addHandler(handler); 
-		LOGGER.setLevel(Level.FINE);
+		LOGGER.setLevel(Level.FINEST);
 	}
 
 	//////////////////////////////////////////////////////////////////////////
@@ -102,11 +101,12 @@ public class DHTMain {
 
 		String   key    = null;
 		Integer value   = 0;
+		
+		//Configura DHTMain (interfaz) y Logger 
+		DHTMain mainDHT = new DHTMain();
 
 		//Para el servidor creado se genera el DHTManager
 		DHTManager dht = new DHTManager();
-		//Configura DHTMain (interfaz) y Logger 
-		DHTMain mainDHT = new DHTMain();
 
 		while (!exit) {
 			try {
@@ -127,9 +127,6 @@ public class DHTMain {
 				//Si no hay QUORUM, No responde a ninguna operacion esperando a que se levante otro servidor
 				if (!dht.isQuorum()) {
 					System.out.println("No hay quorum. No es posible ejecutar su elección");
-					//Podemos llevarlo al sitio en el que se detecta que no hay quorum una vez cae un server
-					//String[] command = { "xterm", "-e", "java", "-Djgroups.bind_addr=127.0.0.1", "-Djava.net.preferIPv4Stack=true", "es.upm.dit.dscc.DHT.DHTMain", cluster};
-					//Process proc = new ProcessBuilder(command).start();
 					continue;
 				}
 				

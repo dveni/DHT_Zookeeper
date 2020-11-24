@@ -15,7 +15,7 @@ public class DHTManager implements DHTUserInterface {
 	private int               nReplica     = 2;
 	
 	private operationBlocking mutex;
-	//TODO Ver que hacer con esto:
+	
 	private String           localAddress;
 	
 	private TableManager      tableManager;
@@ -26,16 +26,13 @@ public class DHTManager implements DHTUserInterface {
 
 	public DHTManager() {
 
-		LOGGER.warning("Start of configuration of Zookeeper Cluster");
+		LOGGER.fine("Start of configuration of the new Server | Zookeeper Cluster");
 		InetAddress localhost;
 		String ip;
         String hostname;
         
-        //TODO
-        //Falta darle un valor a localAddress, que realmente va a ser el myId de cada znode
-        
 		try {
-			//TODO REVISAR ESTO MUY BIEN
+			//TODO REVISAR ESTO MUY BIEN << BORRAR, NO VALE PARA NADA
 			//127.0.0.1/nombreTerminal
 			localhost = InetAddress.getLocalHost();
 			//127.0.0.1
@@ -45,9 +42,6 @@ public class DHTManager implements DHTUserInterface {
             System.out.println("New Server: IP Addres: " + ip + " | Hostname: " + hostname);
             //TODO FALTA EL PORT --> ¿PASAR COMO PARAMETRO Y COGER EN EL MAIN???
             
-            //TODO Dejo esto aqui para que funcionen el resto de clases, pero localAddres no vale nada       
-            //localAddress = ip;
-            
 		} catch (Exception e) {
 			LOGGER.severe("Error to create the Zookeeper Cluster");
 		}
@@ -55,20 +49,18 @@ public class DHTManager implements DHTUserInterface {
 		if (!endConfigure) {
 			configure();
 		}
+		
+		this.localAddress = zkMember.getLocalAddress();
+		this.tableManager.setLocalAddress(this.localAddress);
 
-		LOGGER.finest("End of configuration Zookeeper Cluster");
+		LOGGER.fine("End of configuration of the new Server | Zookeeper Cluster | LocalAddress: " + this.localAddress);
 	}
 
 	private void configure() {
 		this.mutex           = new operationBlocking();
-		this.zkMember        = new zkMember(nServersMax, nReplica, tableManager);
-		//TODO Asignacion de myId al localAddress
-		this.localAddress = zkMember.getLocalAddress();
-		
-		//TODO No se si va a dar problemas crear zkMember antes que tableManager...........
-		this.tableManager    = new TableManager(localAddress, nServersMax, nReplica);
+		this.tableManager    = new TableManager(localAddress, nServersMax, nReplica);	
+		this.zkMember        = new zkMember(nServersMax, nReplica, tableManager);		
 		this.dht             = new DHTOperations(mutex, tableManager);
-		
 		this.endConfigure    = true;
 	}
 	
@@ -116,9 +108,6 @@ public class DHTManager implements DHTUserInterface {
 	public String toString() {
 		return dht.toString();
 	}
-
-
-
 }
 
 
