@@ -5,7 +5,6 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.util.Random;
 import java.util.Set;
 
@@ -17,12 +16,6 @@ import org.apache.zookeeper.ZooDefs.Ids;
 import org.apache.zookeeper.ZooKeeper;
 import org.apache.zookeeper.data.Stat;
 
-// Two watchers are used:
-// - cwatcher: wait until the session is created. 
-// - watcherMember: notified when the number of members is updated
-// the method process has to be created for implement Watcher. However
-// this process should never be invoked, as the "this" watcher is used
-
 public class zkMember implements Watcher {
 
 	private java.util.logging.Logger LOGGER = DHTMain.LOGGER;
@@ -32,30 +25,17 @@ public class zkMember implements Watcher {
 	private boolean isQuorum = false;
 	private boolean firstQuorum = false;
 	private boolean pendingReplica = false;
-
 	private List<String> previousZnodes = null;
-
 	private String failedServerTODO;
-
 	private String localAddress;
-
 	private TableManager tableManager;
 
+	
 	private static final int SESSION_TIMEOUT = 5000;
-
 	private static String rootMembers = "/members";
 	private static String aMember = "/member-";
 	private String myId;
-	private String leaderPath;
 
-	// TODO VER QUE HACER CON LAS OPERACIONES
-	// Nodo para las operaciones
-	private static String rootOperations = "/operations";
-	private static String aOperation = "/oper-";
-	private String operationId;
-
-	// This is static. A list of zookeeper can be provided for decide where to
-	// connect
 	String[] hosts = { "127.0.0.1:2181", "127.0.0.1:2181", "127.0.0.1:2181" };
 
 	private ZooKeeper zk;
@@ -65,12 +45,10 @@ public class zkMember implements Watcher {
 		this.nServersMax = nServersMax;
 		this.nReplica = nReplica;
 		this.tableManager = tableManager;
-		// Select a random zookeeper server
 		Random rand = new Random();
 		int i = rand.nextInt(hosts.length);
 
-		// Create a session and wait until it is created.
-		// When is created, the watcher is notified
+		// Create a session
 		try {
 			if (zk == null) {
 				zk = new ZooKeeper(hosts[i], SESSION_TIMEOUT, cWatcher);
@@ -85,19 +63,13 @@ public class zkMember implements Watcher {
 
 		// Add the process to the members in zookeeper
 		if (zk != null) {
-			// Create a folder for members and include this process/server
 			try {
-				// Create a folder, if it is not created
 				Stat s = zk.exists(rootMembers, false); // this);
 				if (s == null) {
-					// Created the znode, if it is not created.
 					zk.create(rootMembers, new byte[0], Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT);
 				}
-
-				// Create a znode for registering as member and get my id
 				myId = zk.create(rootMembers + aMember, new byte[0], Ids.OPEN_ACL_UNSAFE,
 						CreateMode.EPHEMERAL_SEQUENTIAL);
-
 				myId = myId.replace(rootMembers + "/", "");
 				this.localAddress = myId;
 
@@ -123,22 +95,17 @@ public class zkMember implements Watcher {
 				System.out.println(" ]");
 				/////////////////////////////////////////////////////////
 
-				//List<String> list = zk.getChildren(rootMembers, false, s);
-				//zk.getData(rootMembers, watcherDataTransfer, stat)
-				// TODO VER QUE HACER CON LAS OPERACIONES
-				// Creamos carpeta raiz para ir introduciendo las operaciones
-				s = zk.exists(rootOperations, false); // this);
-				if (s == null) {
-					// Created the znode, if it is not created.
-					zk.create(rootOperations, new byte[0], Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT);
-				}
+				
+				//TODO Ponemos un watcher apuntando al rootMembers para cuando se añada un server al que mandarle la info
+				s = zk.exists(rootMembers, false);
+				zk.getData(rootMembers, watcherTransferData, s);
+				
 			} catch (KeeperException e) {
 				System.out.println("The session with Zookeeper failes. Closing");
 				return;
 			} catch (InterruptedException e) {
 				System.out.println("InterruptedException raised");
 			}
-
 		}
 	}
 
@@ -159,7 +126,7 @@ public class zkMember implements Watcher {
 	public void process(WatchedEvent event) {
 		try {
 			System.out.println("Unexpected invocated this method. Process of the object");
-			List<String> list = zk.getChildren(rootMembers, false); // this);
+			List<String> list = zk.getChildren(rootMembers, false);
 		} catch (Exception e) {
 			System.out.println("Unexpected exception. Process of the object");
 		}
@@ -174,27 +141,7 @@ public class zkMember implements Watcher {
 		System.out.println();
 		System.out.println("--------------------------------------------------------------------------------------");
 	}
-
-	// TODO VER QUE HACER CON LAS OPERACIONES!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-	private void createOperation() {
-		try {
-			Stat s = zk.exists(rootOperations, false);
-			// Create a znode for registering as operation and get my id
-			operationId = zk.create(rootOperations + aOperation, new byte[0], Ids.OPEN_ACL_UNSAFE,
-					CreateMode.EPHEMERAL_SEQUENTIAL);
-
-			operationId = operationId.replace(rootOperations + "/", "");
-
-			// Cambiar este watcher TODO
-			List<String> list = zk.getChildren(rootOperations, watcherMember, s);
-			System.out.println("Created znode operation id:" + operationId);
-
-		} catch (Exception e) {
-			System.out.println("Error while creating operation");
-			System.out.println("Exception: " + e);
-		}
-	}
-
+	
 	// Notified when the number of children in /member is updated
 	private Watcher watcherMember = new Watcher() {
 		public void process(WatchedEvent event) {
@@ -205,7 +152,7 @@ public class zkMember implements Watcher {
 				printListMembers(list);
 				System.out.println(">>> Enter option: 1) Put. 2) Get. 3) Remove. 4) ContainKey  5) Values 7) Init 0) Exit");
 			} catch (Exception e) {
-				System.out.println("Exception: wacherMember");
+				System.out.println("Exception: watcherMember");
 			}
 		}
 	};
@@ -216,20 +163,51 @@ public class zkMember implements Watcher {
 		public void process(WatchedEvent event) {
 			System.out.println("------------------------------------Transfer Data------------------------------------\n");
 			try {
-				List<String> list = zk.getChildren(rootMembers, watcherTransferData); // this);
-				manageZnodes(list);
-				printListMembers(list);
+				//Asi conseguimos que solo envie datos un servidor
+				if (isLeader()) {
+					//Obtenemos direccion a la que enviar, y la eliminamos del rootMember
+					String newServer = getAddressFromZnode();
+					System.out.println("There is a new Server. Sending data to: " + newServer + " | Zookeeper Cluster");		
+					transferData(newServer);		
+				}
+				//Configuramos el watcher para el siguiente
+				Stat s = zk.exists(rootMembers, false);
+				zk.getData(rootMembers, watcherTransferData, s);
+				System.out.println(">>> Enter option: 1) Put. 2) Get. 3) Remove. 4) ContainKey  5) Values 7) Init 0) Exit");
 			} catch (Exception e) {
-				System.out.println("Exception: wacherMember");
+				System.out.println("Exception: watcherTransferData");
 			}
 		}
 	};
 
+	//Metodo para que un server añada su myId a rootMember y pueda recibir info
+	private void setAddressToZnode(String address) {
+		try {
+			byte[] byteArrayAddress = address.getBytes();
+			Stat s = zk.exists(rootMembers, false);
+			zk.setData(rootMembers, byteArrayAddress, s.getVersion());
+		} catch (Exception e) {
+			System.out.println("Error: Valor de znode erroneo");
+			System.out.println("Exception: " + e);
+		}
+	}	
+	//Metodo para conseguir el myId almacenado en rootMember y se envie info a este server
+	private String getAddressFromZnode() {
+		String address = "";
+		try {
+			Stat s = zk.exists(rootMembers, false);
+			byte[] b = zk.getData(rootMembers, false, s);
+			address = new String(b);
+		} catch (Exception e) {
+			System.out.println("Error: Valor del address erroneo");
+			System.out.println("Exception: " + e);
+		}
+		return address;
+	}	
+
+	
 	public boolean manageZnodes(List<String> newZnodes) {
-
 		String address = null;
-
-		// MUY IMPORTANTE --> ORDENAR LA LISTA
 		Collections.sort(newZnodes);
 
 		// There are enough servers: nServers = nServersMax
@@ -252,22 +230,23 @@ public class zkMember implements Watcher {
 			pendingReplica = true;
 			previousZnodes = newZnodes;
 
-			// TODO VER SI METER AQUI LA MEJORA DE LANZAR SERVERS AUTOMATICAMENTE CUANDO NO HAY QUORUM
-
-			/*if (firstQuorum && nServers < 3) {
+			// TODO MEJORA DE LANZAR SERVERS AUTOMATICAMENTE CUANDO NO HAY QUORUM
+			//DESCOMENTAR
+			/*
+			if (firstQuorum && nServers < 3) {
 				if (isLeader()) {
 					try {
 						System.out.println("Zookeeper Cluster | Starting a new server...");
-						String[] command = { "xterm", "-e", "java", "-Djava.net.preferIPv4Stack=true","es.upm.dit.dscc.DHT.DHTMain" };
+						String[] command = {"gnome-terminal", "--window", "-x", "bash", "-c", "java -Djava.net.preferIPv4Stack=true es.upm.dit.dscc.DHT.DHTMain; exec bash"};
 						Process proc = new ProcessBuilder(command).start();
 					} catch (IOException e) {
 						System.out.println("Exception starting automatic server...: " + e);
 					}
 				}
-			}*/
+			}
+			*/	
 			return false;
 		}
-
 		// Caso: Se añade un servidor
 		if (newZnodes.size() > nServers) {
 			// Caso: se añade un servidor al cluster y le actualizamos su tabla DHTServers
@@ -275,8 +254,7 @@ public class zkMember implements Watcher {
 				for (Iterator<String> iterator = newZnodes.iterator(); iterator.hasNext();) {
 					String itAddress = (String) iterator.next();
 					addServer(itAddress);
-					LOGGER.fine("Added a server. NServers: " + nServers + " | Server: " + itAddress
-							+ " | Zookeeper Cluster");
+					LOGGER.fine("Added a server. NServers: " + nServers + " | Server: " + itAddress + " | Zookeeper Cluster");
 					if (nServers == nServersMax) {
 						isQuorum = true;
 						firstQuorum = true;
@@ -308,7 +286,6 @@ public class zkMember implements Watcher {
 							// Send the Replicas
 							// TODO AQUI PONER EL WATCHER PARA ENVIAR DATOS AL NUEVO SERVER
 							setAddressToZnode(failedServer);
-							// transferData(failedServer);
 							pendingReplica = true;
 						} else {
 							firstQuorum = true;
@@ -374,7 +351,6 @@ public class zkMember implements Watcher {
 	}
 	
 	
-
 	public void transferData(String address) {
 		HashMap<Integer, String> DHTServers = tableManager.getDHTServers();
 		HashMap<Integer, DHTUserInterface> DHTTables = tableManager.getDHTTables();
@@ -413,7 +389,7 @@ public class zkMember implements Watcher {
 			for (Iterator<String> iterator = hashMap.iterator(); iterator.hasNext();) {
 				String key = (String) iterator.next();
 				LOGGER.fine("posNew + " + posNew + " key: " + key);
-				// TODO
+				// TODO desde aqui llamar a las operaciones??
 				// sendMessages.sendPut(address, new DHT_Map(key, DHTTables.get(posNew).get(key)), true);
 			}
 		}
@@ -425,7 +401,6 @@ public class zkMember implements Watcher {
 				posPrev = posPrev + nServersMax;
 			}
 			if (posLocal == posPrev) {
-				LOGGER.fine("replica: " + posNext + " address: " + address);
 				LOGGER.fine("replica: " + posNext + " address: " + address);
 				Set<String> hashMap = DHTTables.get(posLocal).keySet();
 				for (Iterator<String> iterator = hashMap.iterator(); iterator.hasNext();) {
@@ -491,33 +466,6 @@ public class zkMember implements Watcher {
 		return tables;
 	}
 	
-	
-	private void setAddressToZnode(String address) {
-		try {
-			byte[] byteArrayAddress = address.getBytes();
-			Stat s = zk.exists(rootMembers, false);
-			zk.setData(rootMembers, byteArrayAddress, s.getVersion());
-		} catch (Exception e) {
-			System.out.println("Error: Valor de znode erroneo");
-			System.out.println("Exception: " + e);
-		}
-	}
-	
-	private String getAddressFromZnode() {
-		String address = "vacio";
-		try {
-			Stat s = zk.exists(rootMembers, false);
-			byte[] b = zk.getData(rootMembers, false, s);
-			address = new String(b);
-		} catch (Exception e) {
-			System.out.println("Error: Valor del address erroneo");
-			System.out.println("Exception: " + e);
-		}
-		return address;
-	}
-	
-	
-	
 	public boolean isQuorum() {
 		return isQuorum;
 	}
@@ -538,6 +486,8 @@ public class zkMember implements Watcher {
 		}
 		return false;
 	}
+	
+	
 	
 	//TODO CREO QUE ESTOS DOS METODOS NO SE USAN
 	public void putReplica(int posReplica, DHTUserInterface dht) {

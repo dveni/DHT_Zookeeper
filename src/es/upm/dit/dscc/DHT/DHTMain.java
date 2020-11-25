@@ -123,8 +123,6 @@ public class DHTMain {
 					}
 					
 				}
-				//Si lo comentamos entra en el problema del bucle
-				//Si no hay QUORUM, No responde a ninguna operacion esperando a que se levante otro servidor
 				if (!dht.isQuorum()) {
 					System.out.println("No hay quorum. No es posible ejecutar su elección");
 					continue;

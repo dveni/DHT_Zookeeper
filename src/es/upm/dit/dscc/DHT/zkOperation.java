@@ -40,6 +40,8 @@ public class zkOperation implements Watcher{
 	private static String aOperation = "/oper-";
 	private String operationId;
 	
+
+	
 	private static String leaderPath;
 	
 	// This is static. A list of zookeeper can be provided for decide where to connect
@@ -202,6 +204,39 @@ public class zkOperation implements Watcher{
 			}
 		}
 	};
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	//TODO PONGO AQUI CODIGO QUE TENIA EN ZKMEMBER QUE PUEDE VENIR BIEN AQUI
+	//SEGURAMENTE HAYA QUE BORRARLO, PERO PARA BORRAR SIEMPRE HAY TIEMPO
+	// UN SALUDO
+	private void createOperation() {
+		try {
+			Stat s = zk.exists(rootOperations, false);
+			// Create a znode for registering as operation and get my id
+			operationId = zk.create(rootOperations + aOperation, new byte[0], Ids.OPEN_ACL_UNSAFE,
+					CreateMode.EPHEMERAL_SEQUENTIAL);
+
+			operationId = operationId.replace(rootOperations + "/", "");
+
+			// Cambiar este watcher TODO
+			List<String> list = zk.getChildren(rootOperations, watcherMember, s);
+			System.out.println("Created znode operation id:" + operationId);
+
+		} catch (Exception e) {
+			System.out.println("Error while creating operation");
+			System.out.println("Exception: " + e);
+		}
+	}
+
 	
 	
 }
