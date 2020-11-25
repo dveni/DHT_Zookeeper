@@ -70,19 +70,20 @@ public class zkMember implements Watcher {
 		// Add the process to the members in zookeeper
 		if (zk != null) {
 			try {
-				Stat s = zk.exists(rootMembers, false); // this);
+				Stat s2 = zk.exists(dhtServers, false);
+				if (s2 == null) {
+					zk.create(dhtServers, new byte[0], Ids.OPEN_ACL_UNSAFE, CreateMode.EPHEMERAL);
+				} else {
+					HashMap<Integer, String> dhtFromZnode = getServersFromZnode();
+					putDHTServers(dhtFromZnode);
+				}
+				
+				Stat s = zk.exists(rootMembers, false);
 				if (s == null) {
 					zk.create(rootMembers, new byte[0], Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT);
 				}
 				
-				Stat s2 = zk.exists(dhtServers, false); // this);
-				if (s2 == null) {
-					zk.create(dhtServers, new byte[0], Ids.OPEN_ACL_UNSAFE, CreateMode.EPHEMERAL_SEQUENTIAL);
-				} else {
-					init();	
-				}
 
-				
 				myId = zk.create(rootMembers + aMember, new byte[0], Ids.OPEN_ACL_UNSAFE,
 						CreateMode.EPHEMERAL_SEQUENTIAL);
 				myId = myId.replace(rootMembers + "/", "");
@@ -119,6 +120,9 @@ public class zkMember implements Watcher {
 				s = zk.exists(rootMembers, false);
 				zk.getData(rootMembers, watcherTransferData, s);
 				
+				if (isLeader()) {
+					setServersToZnode(tableManager.getDHTServers());
+				}	
 			} catch (KeeperException e) {
 				System.out.println("The session with Zookeeper failes. Closing");
 				return;
@@ -300,11 +304,6 @@ public class zkMember implements Watcher {
 		return DHTServersFromZnode;
 	}
 
-	//Inicializamos DHTServers
-	private void init() {
-		HashMap<Integer, String> dhtFromZnode = getServersFromZnode();
-		this.tableManager.setDHTServers(dhtFromZnode);
-	}
 	
 	public boolean manageZnodes(List<String> newZnodes) {
 		String address = null;
@@ -390,6 +389,7 @@ public class zkMember implements Watcher {
 							// TODO
 							else {
 								// sendMessages.sendServers(failedServer, DHTServers);
+								setServersToZnode(this.tableManager.getDHTServers());
 								System.out.println("TODO <<<< AQUI HAY QUE HACER ALGO [2]");
 							}
 							// Send the Replicas
@@ -603,7 +603,8 @@ public class zkMember implements Watcher {
 		HashMap<Integer, DHTUserInterface> DHTTables = tableManager.getDHTTables();
 		DHTTables.put(posReplica, dht);
 	}
-	//TODO CREO QUE ESTOS DOS METODOS NO SE USAN
+	
+	//TODO ESTE SI SE USA
 	public void putDHTServers(HashMap<Integer, String> newDHTServers) {
 		HashMap<Integer, String> DHTServers = tableManager.getDHTServers();
 		for (int i = 0; i < nServersMax; i++) {
