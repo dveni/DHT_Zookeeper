@@ -225,11 +225,15 @@ public class zkOperation implements Watcher{
 				int[] answer = reconstructedData.getAnswer();
 				// Por defecto se inicializa con todo ceros
 				// Si la respuesta de algun server es cero, aun no ha ejecutado la operacion 
-				if(answer[0] == 0) {
-					LOGGER.warning("watcherData: Server at pos 0 has not perfomed the operation yet");
-				}else if(answer[1] == 0) {
-					LOGGER.warning("watcherData: Server at pos 1 has not perfomed the operation yet");
-				}else {
+				
+				boolean allServersPerformedOp = true;
+				for(int i= 0; i<answer.length; i++) {
+					if(answer[i]==0)
+						allServersPerformedOp = false;
+						LOGGER.warning("watcherData: Server at pos" + i +" has not perfomed the operation yet");
+				}
+				
+				if(allServersPerformedOp ) {
 					// Ambos servidores han ejecutado la operacion
 					// Se puede meter logica de recuperacion de errores si vemos que las respuestas son distintas
 					Operations operation = reconstructedData.getOperation();
