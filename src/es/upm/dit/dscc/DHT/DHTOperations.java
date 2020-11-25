@@ -23,11 +23,12 @@ public class DHTOperations implements DHTUserInterface {
    
 	private operationBlocking mutex;
 	private TableManager      tableManager;
+	private int nReplica;
 
-	public DHTOperations (operationBlocking mutex, TableManager tableManager) {
+	public DHTOperations (operationBlocking mutex, TableManager tableManager, int nReplica) {
 		this.mutex        = mutex;
 		this.tableManager = tableManager;
-		
+		this.nReplica = nReplica;
 		
 	}
 
@@ -41,7 +42,7 @@ public class DHTOperations implements DHTUserInterface {
 		// Create the array of nodes where map should be stored
 		int nodes[] = tableManager.getNodes(map.getKey());
 		
-		zOpData opData = new zOpData(operation, nodes);
+		zOpData opData = new zOpData(operation, nodes, nReplica);
 		
 		//Serializar datos de operacion (put map) y nodos que deben hacerla 
 		byte[] data = DataSerialization.serialize(opData);

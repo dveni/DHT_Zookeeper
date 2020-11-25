@@ -60,7 +60,7 @@ public class DHTManager implements DHTUserInterface {
 		this.mutex           = new operationBlocking();
 		this.tableManager    = new TableManager(localAddress, nServersMax, nReplica);	
 		this.zkMember        = new zkMember(nServersMax, nReplica, tableManager);		
-		this.dht             = new DHTOperations(mutex, tableManager);
+		this.dht             = new DHTOperations(mutex, tableManager, nReplica);
 		this.endConfigure    = true;
 	}
 	

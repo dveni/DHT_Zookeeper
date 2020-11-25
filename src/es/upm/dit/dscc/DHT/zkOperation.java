@@ -31,8 +31,7 @@ public class zkOperation implements Watcher{
 	private java.util.logging.Logger LOGGER = DHTMain.LOGGER;
 	
 	
-	private List<String> previousZnodes = null;
-	
+	private int nReplica;	
 	private static final int SESSION_TIMEOUT = 5000;
 	//Nodo raiz
 	private static String rootOperations = "/operations";
@@ -40,7 +39,8 @@ public class zkOperation implements Watcher{
 	private static String aOperation = "/oper-";
 	private String operationId;
 	private String pathToOperation;
-	
+	private static Integer mutexOp = -1;
+
 	
 	private operationBlocking mutex;
 
@@ -55,7 +55,7 @@ public class zkOperation implements Watcher{
 	public zkOperation (byte[] data, operationBlocking mutex) {
 		
 		this.mutex = mutex;
-		
+		this.nReplica = nReplica;
 		// Select a random zookeeper server
 		Random rand = new Random();
 		int i = rand.nextInt(hosts.length);
@@ -106,7 +106,7 @@ public class zkOperation implements Watcher{
 				System.out.println("Created znode operation id:"+ operationId );
 				System.out.println("Data in zOperation node: " + reconstructedData.toString());
 				printListMembers(list);
-				isLeader();
+				//isLeader();
 			} catch (KeeperException e) {
 				System.out.println("The session with Zookeeper failes. Closing");
 				return;
@@ -130,18 +130,10 @@ public class zkOperation implements Watcher{
 				if(index == 0) {
 					//Es el lider
 					System.out.println("[Process: " + operationId + "] Next operation to be done");
-					//SI LA OPERACION LEADER, MONTAMOS BARRIER 
-					
-					// TODO: Barrier
 					
 					
-					//TODO: Antes de borrar, ponemos la respuesta en el nodo operacion, lo que hace saltar un watcher para quitar el mutex
 					
 					
-					//Borramos el nodo op cuando se ha realizado
-					// Al borrar el nodo saltará un watcher al resto de clientes
-					Stat s = zk.exists(leaderPath, false);
-					zk.delete(leaderPath, s.getVersion());
 					return true;
 				} else {
 					//NO ES EL LIDER
@@ -154,17 +146,16 @@ public class zkOperation implements Watcher{
 						// No existe, vuelvo a realizar la eleccion de lider
 						isLeader();
 					}else {
-						// Si existe, miro si la operacion a realizar la tengo que hacer yo
+						// Si existe, espero a que se termine de hacer esa operacion
 						
-						//TODO: Servidores con tabla donde hacer la operacion la realizan 
-						/*try {
-							synchronized (mutex) {
-								mutex.wait();
+						try {
+							synchronized (mutexOp) {
+								mutexOp.wait();
 								isLeader();
 							}
 						} catch (Exception e) {
 							System.out.println("Exception: " + e);
-						}*/
+						}
 					}
 					return false;
 				}
@@ -209,6 +200,11 @@ public class zkOperation implements Watcher{
 		public void process(WatchedEvent event) {
 			System.out.println("------------------Watcher Member------------------\n");		
 			try {
+				// Al recibir el watcher de cualquier nodo notifico a mi hebra de que levante el bloqueo
+				synchronized (mutexOp) {
+					mutexOp.notify();
+				}
+				
 				List<String> list = zk.getChildren(rootOperations,  false); //this);
 				printListMembers(list);
 				
@@ -226,8 +222,24 @@ public class zkOperation implements Watcher{
 				Stat opStat = zk.exists(pathToOperation, false);
 				byte[] opData = zk.getData(pathToOperation, false, opStat);
 				zOpData reconstructedData = DataSerialization.deserialize(opData);
-				Operations operation = reconstructedData.getOperation();
-				mutex.receiveOperation(operation);
+				int[] answer = reconstructedData.getAnswer();
+				// Por defecto se inicializa con todo ceros
+				// Si la respuesta de algun server es cero, aun no ha ejecutado la operacion 
+				if(answer[0] == 0) {
+					LOGGER.warning("watcherData: Server at pos 0 has not perfomed the operation yet");
+				}else if(answer[1] == 0) {
+					LOGGER.warning("watcherData: Server at pos 1 has not perfomed the operation yet");
+				}else {
+					// Ambos servidores han ejecutado la operacion
+					// Se puede meter logica de recuperacion de errores si vemos que las respuestas son distintas
+					Operations operation = reconstructedData.getOperation();
+					mutex.receiveOperation(operation);
+					//Borramos el nodo op cuando se ha realizado
+					// Al borrar el nodo saltará un watcher al resto de clientes
+					Stat s = zk.exists(leaderPath, false);
+					zk.delete(leaderPath, s.getVersion());
+				}
+				
 			} catch (Exception e) {
 				System.out.println("Exception: wacherData");
 			}

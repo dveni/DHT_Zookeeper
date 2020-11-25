@@ -14,11 +14,21 @@ public class zOpData implements Serializable {
 	
 	private Operations operation;
 	private int[] nodes;
+	private int[] answer;
 	
-	public zOpData(Operations operation, int[] nodes) {
+	public zOpData(Operations operation, int[] nodes, int nReplica) {
 		super();
 		this.operation = operation;
 		this.nodes = nodes;
+		this.answer = new int[nReplica];
+	}
+
+	public int[] getAnswer() {
+		return answer;
+	}
+
+	public void setAnswer(int[] answer) {
+		this.answer = answer;
 	}
 
 	public Operations getOperation() {
