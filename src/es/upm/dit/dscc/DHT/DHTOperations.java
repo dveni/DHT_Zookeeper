@@ -33,7 +33,11 @@ public class DHTOperations implements DHTUserInterface {
 	}
 
 	
-	
+	@Override
+	public Integer putMsg(DHT_Map map) {
+		
+		return putLocal(map);
+	}
 	
 	@Override
 	public Integer put(DHT_Map map) {
@@ -197,11 +201,7 @@ public class DHTOperations implements DHTUserInterface {
 
 
 
-	@Override
-	public Integer putMsg(DHT_Map map) {
-		// TODO Auto-generated method stub
-		return null;
-	}
+	
 	
 		
 	

@@ -9,6 +9,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.nio.ByteBuffer;
 import java.util.Random;
 import java.util.Set;
 
@@ -33,12 +34,23 @@ public class zkMember implements Watcher {
 	private String failedServerTODO;
 	private String localAddress;
 	private TableManager tableManager;
-
+	private DHTUserInterface dht;
 	
 	private static final int SESSION_TIMEOUT = 5000;
 	private static String rootMembers = "/members";
 	private static String aMember = "/member-";
 	private String myId;
+	private Integer position;
+	
+	private static String rootOperations = "/operations";
+	
+	//LOCK
+	private static String lockPath = "/locknode";
+	private static String guidLock = "/guid-lock-";
+	private static Integer mutex = -10;
+	private String lockId;
+	private static String leaderPath;
+
 	
 	private static String dhtServers = "/DHTServers";
 
@@ -46,11 +58,12 @@ public class zkMember implements Watcher {
 
 	private ZooKeeper zk;
 
-	public zkMember(int nServersMax, int nReplica, TableManager tableManager) {
+	public zkMember(int nServersMax, int nReplica, TableManager tableManager, DHTUserInterface dht) {
 		this.nServers = 0;
 		this.nServersMax = nServersMax;
 		this.nReplica = nReplica;
 		this.tableManager = tableManager;
+		this.dht = dht;
 		Random rand = new Random();
 		int i = rand.nextInt(hosts.length);
 
@@ -104,8 +117,8 @@ public class zkMember implements Watcher {
 				
 				/////////////////////////////////////////////////////////
 				//TODO (Lo ideal es meterlo en data)
-				Integer posicion = tableManager.getPosition(myId);
-				System.out.println("Soy el servidor: S" + posicion);
+				position = tableManager.getPosition(myId);
+				System.out.println("Soy el servidor: S" + position);
 				
 				int[] myServers = getServers(myId);
 				System.out.print("Se almacena en: [");
@@ -120,6 +133,9 @@ public class zkMember implements Watcher {
 				s = zk.exists(rootMembers, false);
 				zk.getData(rootMembers, watcherTransferData, s);
 				
+				
+				//Configuracion para poner watcher sobre /rootoperations
+				configOps();
 				if (isLeader()) {
 					setServersToZnode(tableManager.getDHTServers());
 				}	
@@ -131,6 +147,199 @@ public class zkMember implements Watcher {
 			}
 		}
 	}
+
+	private void configOps() {
+		if (zk != null) {
+			// Create a folder for members and include this process/server
+			try {
+				// Create a folder, if it is not created
+				String response = new String();
+				Stat s = zk.exists(rootOperations, false); //this);
+				if (s == null) {
+					// Created the znode, if it is not created.
+					LOGGER.fine("Creating /operations from zkMember");
+					response = zk.create(rootOperations, new byte[0], 
+							Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT);
+					System.out.println(response);
+				}
+
+				s = zk.exists(rootOperations, false);
+				List<String> list = zk.getChildren(rootOperations, watcherOperation, s);
+				printListMembers(list);
+			} catch (KeeperException e) {
+				System.out.println("The session with Zookeeper failes. Closing");
+				return;
+			} catch (InterruptedException e) {
+				System.out.println("InterruptedException raised");
+			}
+		}
+		
+	}
+	
+	private void configLock() {
+		if (zk != null) {
+			// Create a folder for locknode and include this process/server
+			try {
+				Stat s = zk.exists(lockPath, false);
+				if (s == null) {
+					//Creamos LOCKNODE e inicializamos el valor del contador a 0
+					//Data -> Counter = 0 (Valor inicial)
+					int data = 0;
+					byte[] d = ByteBuffer.allocate(4).putInt(data).array();
+					// Created the znode, if it is not created.
+					zk.create(lockPath, d, 
+							Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT);
+				}
+				// Set watcher on lockpath
+				List<String> list = zk.getChildren(lockPath, false, s); //this, s);
+				printListMembers(list);
+				
+				// Create a znode for registering as member and get my id
+				// Deberia activar el watcher creado anteriormente
+				lockId = zk.create(lockPath + guidLock, new byte[0], 
+						Ids.OPEN_ACL_UNSAFE, CreateMode.EPHEMERAL_SEQUENTIAL);
+				lockId = lockId.replace(lockPath + "/", "");
+				System.out.println("Created znode lock id:"+ lockId );
+			} catch (KeeperException e) {
+				System.out.println("The session with Zookeeper failes. Closing");
+				System.out.println("Exception: "+ e);
+				return;
+			} catch (InterruptedException e) {
+				System.out.println("InterruptedException raised");
+				System.out.println("Exception: "+ e);
+			}
+		}
+		
+	}
+
+	// Notified when the number of children in /operations is updated
+	private Watcher watcherOperation = new Watcher() {
+		public void process(WatchedEvent event) {
+			System.out.println("------------------------------------Watcher Operation------------------------------------\n");
+			try {
+				List<String> list = zk.getChildren(rootOperations, watcherOperation); // this);
+				printListMembers(list);
+				configLock();
+				operationLeader();
+			} catch (Exception e) {
+				System.out.println("Exception: watcherOperation");
+			}
+		}
+	};
+	
+	private boolean operationLeader() {
+		System.out.println("------------------IS LOCK LEADER?------------------\n");
+		try {
+			List<String> list = zk.getChildren(lockPath,  false);
+			Collections.sort(list);
+			int index = list.indexOf(lockId.substring(lockId.lastIndexOf('/') + 1));
+			String leader = list.get(0);
+			leaderPath = lockPath + "/" + leader;
+			if(index == 0) {
+				//Es el lider
+				System.out.println("[Process: " + lockId + "] I AM THE LEADER, I GET THE zOp");
+				//SI ES EL LIDER DEL /LOCK, HACEMOS LA OPERACION, MODIFICAMOS EL VALOR DEL zOp Y BORRAMOS EL NODO 
+				// para que otro server pueda modificar la zOp
+				
+				doOperation();
+				
+				//Borramos el nodo Lock que ha actualizado el valor del counter. 
+				// Al borrar el nodo saltará un watcher al resto de clientes
+				Stat s = zk.exists(leaderPath, false);
+				zk.delete(leaderPath, s.getVersion());
+				return true;
+			} else {
+				//NO ES EL LIDER
+				System.out.println("[Process: " + lockId + "] - I AM NO THE LEADER! - Setting watch on node with path: " + leaderPath);				 
+				System.out.println("The leader is: " + leader);
+				//Ponemos watcher solo en el lider
+				Stat s = zk.exists(leaderPath, watcherLock);
+				// Comprobamos si existe el lider
+				if (s==null) {
+					// No existe, vuelvo a realizar la eleccion de lider
+					operationLeader();
+				}else {
+					// Si existe, me quedo esperando a notificacion (llega con un watcher) y realizo la eleccion del lider
+					try {
+						synchronized (mutex) {
+							mutex.wait();
+							operationLeader();
+						}
+					} catch (Exception e) {
+						System.out.println("Exception: " + e);
+					}
+				}
+				return false;
+			}
+		} catch (Exception e) {
+			System.out.println("Exception: select LockLeader");
+			System.out.println("Exception: "+ e);
+			return false;
+		}
+	}
+	
+	private boolean doOperation() {
+		try {
+			List<String> list = zk.getChildren(rootOperations, false);
+			Collections.sort(list);
+			String leader = list.get(0);
+			String operationPath = rootOperations + "/" + leader;
+			
+			Stat s = zk.exists(operationPath, false);
+			byte[] data = zk.getData(operationPath, false, s);
+			zOpData deserializedData = DataSerialization.deserialize(data);
+			int[] nodes = deserializedData.getNodes();
+			boolean nodeMustDoOperation = false;
+			for(int i = 0; i<nodes.length;i++) {
+				if(nodes[i]== position) {
+					nodeMustDoOperation = true;
+				}
+			}
+			if(nodeMustDoOperation) {
+				Operations operation = deserializedData.getOperation();
+				DHT_Map map = operation.getMap();
+				int value = dht.putMsg(map);
+				operation.setValue(value);
+				int[] answer = deserializedData.getAnswer();
+				// Metemos el valor en el primer valor vacio de answer
+				for(int i = 0; i< answer.length; i++) {
+					if(answer[i] == 0)
+						answer[i] = value; 
+				}
+				// Actualizamos el valor de la operacion y la respuesta
+				deserializedData.setOperation(operation);
+				deserializedData.setAnswer(answer);
+				// Actualizamos el nodo zOp, lo que provocara un watcher en zkOp
+				byte[] updatedData = DataSerialization.serialize(deserializedData);
+				s = zk.exists(operationPath, false);
+				zk.setData(operationPath, updatedData, s.getVersion());
+			}
+			
+		} catch (Exception e) {
+			System.out.println("Exception: selectLeaderWatcher");
+		}
+		return false;
+	}
+			
+	// Notified when the number of children in /locknode is updated
+	private Watcher  watcherLock = new Watcher() {
+		public void process(WatchedEvent event) {
+			System.out.println("------------------Watcher Lock------------------\n");		
+			try {
+				System.out.println("        Update!!");
+				
+				// Al recibir el watcher de cualquier nodo notifico a mi hebra de que levante el bloqueo
+				synchronized (mutex) {
+					mutex.notify();
+				}
+				List<String> list = zk.getChildren(lockPath,  false); //this);
+				printListMembers(list);
+			} catch (Exception e) {
+				System.out.println("Exception: wacherMember");
+				System.out.println("Exception: " + e);
+			}
+		}
+	};
 
 	// Asignamos el myId a LocalAddress
 	public String getLocalAddress() {

@@ -36,6 +36,10 @@ public class zOpData implements Serializable {
 	}
 
 	
+	public void setOperation(Operations operation) {
+		this.operation = operation;
+	}
+
 	public int[] getNodes() {
 		return nodes;
 	}
