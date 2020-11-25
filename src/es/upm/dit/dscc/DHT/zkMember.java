@@ -77,6 +77,7 @@ public class zkMember implements Watcher {
 					HashMap<Integer, String> dhtFromZnode = getServersFromZnode();
 					putDHTServers(dhtFromZnode);
 				}
+
 				
 				Stat s = zk.exists(rootMembers, false);
 				if (s == null) {
@@ -122,7 +123,8 @@ public class zkMember implements Watcher {
 				
 				if (isLeader()) {
 					setServersToZnode(tableManager.getDHTServers());
-				}	
+				}
+
 			} catch (KeeperException e) {
 				System.out.println("The session with Zookeeper failes. Closing");
 				return;
@@ -410,21 +412,31 @@ public class zkMember implements Watcher {
 
 
 	public HashMap<Integer, String> addServer(String address) {
+		Boolean existe = false;
 		HashMap<Integer, String> DHTServers = tableManager.getDHTServers();
 		HashMap<Integer, DHTUserInterface> DHTTables = tableManager.getDHTTables();
 
 		if (nServers >= nServersMax) {
 			return null;
 		} else {
-			// Find a hole
+			//Check first
 			for (int i = 0; i < nServersMax; i++) {
-				if (DHTServers.get(i) == null) {
-					DHTServers.put(i, address);
-					if (DHTTables.get(i) == null) {
-						DHTTables.put(i, new DHTHashMap());
+				String tmp = DHTServers.get(i);
+				if (tmp == address) {
+					existe=true;
+				}
+			}
+			if (!existe) {
+				// Find a hole
+				for (int i = 0; i < nServersMax; i++) {
+					if (DHTServers.get(i) == null) {
+						DHTServers.put(i, address);
+						if (DHTTables.get(i) == null) {
+							DHTTables.put(i, new DHTHashMap());
+						}
+						nServers++;
+						return DHTServers;
 					}
-					nServers++;
-					return DHTServers;
 				}
 			}
 		}
