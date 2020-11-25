@@ -5,13 +5,13 @@ public class operationBlocking {
 	private java.util.logging.Logger LOGGER = DHTMain.LOGGER;
 	
 	private boolean        waiting = false;
-	private OperationsDHT  operation;
+	private Operations  operation;
 	
 	public operationBlocking() {
 		
 	}
 	
-	public synchronized OperationsDHT sendOperation() {
+	public synchronized Operations sendOperation() {
 
 		if (waiting) {
 			LOGGER.severe("Invoke sendOperation while it is waiting");
@@ -33,7 +33,7 @@ public class operationBlocking {
 		return operation;
 	}
 
-	public synchronized void receiveOperation(OperationsDHT  operation) {
+	public synchronized void receiveOperation(Operations  operation) {
 		if (!waiting) {
 			LOGGER.severe("Invoke sendOperation while no waiting");
 			System.out.println("Invoke sendOperation while no waiting");

@@ -39,7 +39,10 @@ public class zkOperation implements Watcher{
 	//Operaciones
 	private static String aOperation = "/oper-";
 	private String operationId;
+	private String pathToOperation;
 	
+	
+	private operationBlocking mutex;
 
 	
 	private static String leaderPath;
@@ -49,8 +52,9 @@ public class zkOperation implements Watcher{
 
 	private ZooKeeper zk;
 	
-	public zkOperation () {
+	public zkOperation (byte[] data, operationBlocking mutex) {
 		
+		this.mutex = mutex;
 		
 		// Select a random zookeeper server
 		Random rand = new Random();
@@ -89,13 +93,18 @@ public class zkOperation implements Watcher{
 				}
 
 				// Create a znode for registering as member and get my id
-				operationId = zk.create(rootOperations + aOperation, new byte[0], 
+				operationId = zk.create(rootOperations + aOperation, data, 
 						Ids.OPEN_ACL_UNSAFE, CreateMode.EPHEMERAL_SEQUENTIAL);
-
+				Stat opStat = zk.exists(operationId, false);
+				byte[] opData = zk.getData(operationId, watcherData, opStat);
+				zOpData reconstructedData = DataSerialization.deserialize(opData);
+				
+				pathToOperation = operationId;
 				operationId = operationId.replace(rootOperations + "/", "");
 				List<String> list = zk.getChildren(rootOperations, false, s); //this, s);
 
-				System.out.println("Created znode nember id:"+ operationId );
+				System.out.println("Created znode operation id:"+ operationId );
+				System.out.println("Data in zOperation node: " + reconstructedData.toString());
 				printListMembers(list);
 				isLeader();
 			} catch (KeeperException e) {
@@ -109,7 +118,7 @@ public class zkOperation implements Watcher{
 	}
 	
 	
-	//Metodo para determinar si un znode es el lider dentro del znode LOCK
+	//Metodo para determinar si un znode op es el lider dentro del znode Operations
 		private boolean isLeader() {
 			System.out.println("------------------IS LOCK LEADER?------------------\n");
 			try {
@@ -124,6 +133,10 @@ public class zkOperation implements Watcher{
 					//SI LA OPERACION LEADER, MONTAMOS BARRIER 
 					
 					// TODO: Barrier
+					
+					
+					//TODO: Antes de borrar, ponemos la respuesta en el nodo operacion, lo que hace saltar un watcher para quitar el mutex
+					
 					
 					//Borramos el nodo op cuando se ha realizado
 					// Al borrar el nodo saltará un watcher al resto de clientes
@@ -205,37 +218,24 @@ public class zkOperation implements Watcher{
 		}
 	};
 	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	//TODO PONGO AQUI CODIGO QUE TENIA EN ZKMEMBER QUE PUEDE VENIR BIEN AQUI
-	//SEGURAMENTE HAYA QUE BORRARLO, PERO PARA BORRAR SIEMPRE HAY TIEMPO
-	// UN SALUDO
-	private void createOperation() {
-		try {
-			Stat s = zk.exists(rootOperations, false);
-			// Create a znode for registering as operation and get my id
-			operationId = zk.create(rootOperations + aOperation, new byte[0], Ids.OPEN_ACL_UNSAFE,
-					CreateMode.EPHEMERAL_SEQUENTIAL);
-
-			operationId = operationId.replace(rootOperations + "/", "");
-
-			// Cambiar este watcher TODO
-			List<String> list = zk.getChildren(rootOperations, watcherMember, s);
-			System.out.println("Created znode operation id:" + operationId);
-
-		} catch (Exception e) {
-			System.out.println("Error while creating operation");
-			System.out.println("Exception: " + e);
+	// Notified when the data in a zOp node I have created is updated
+	private Watcher  watcherData = new Watcher() {
+		public void process(WatchedEvent event) {
+			System.out.println("------------------Watcher Data------------------\n");		
+			try {
+				Stat opStat = zk.exists(pathToOperation, false);
+				byte[] opData = zk.getData(pathToOperation, false, opStat);
+				zOpData reconstructedData = DataSerialization.deserialize(opData);
+				Operations operation = reconstructedData.getOperation();
+				mutex.receiveOperation(operation);
+			} catch (Exception e) {
+				System.out.println("Exception: wacherData");
+			}
 		}
-	}
+	};
+		
+	
+
 
 	
 	

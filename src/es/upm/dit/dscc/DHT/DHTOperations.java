@@ -36,19 +36,18 @@ public class DHTOperations implements DHTUserInterface {
 	
 	@Override
 	public Integer put(DHT_Map map) {
-	
-		OperationsDHT operation; 
 		LOGGER.finest("PUT: Is invoked");
-		int value;
-	
+		Operations operation = new Operations(OperationEnum.PUT_MAP, map); 	
 		// Create the array of nodes where map should be stored
 		int nodes[] = tableManager.getNodes(map.getKey());
 		
+		zOpData opData = new zOpData(operation, nodes);
 		
-		//TODO: Serializar datos de operacion (put map) y nodos que deben hacerla y meterla en zkOp
-		byte[] data = serialize(nodes);
+		//Serializar datos de operacion (put map) y nodos que deben hacerla 
+		byte[] data = DataSerialization.serialize(opData);
 		
-		zkOperation op = new zkOperation();
+		// Creamos zNode con operacion y sus datos 
+		zkOperation op = new zkOperation(data, mutex);
 		
 		//Cuando se borre la operacion porque ya ha terminado de ejecutarse, 
 		// deberá saltar un watcher que notifique a este mutex para responder al cliente
@@ -74,7 +73,7 @@ public class DHTOperations implements DHTUserInterface {
 	public Integer get(String key) {
 
 		java.util.List<String> DHTReplicas = new java.util.ArrayList<String>();
-		OperationsDHT operation; 
+		Operations operation; 
 
 		for (Iterator<String> iterator = DHTReplicas.iterator(); iterator.hasNext();) {
 			String address = (String) iterator.next();
@@ -116,7 +115,7 @@ public class DHTOperations implements DHTUserInterface {
 	@Override
 	public Integer remove(String key) {
 
-		OperationsDHT operation; 
+		Operations operation; 
 		LOGGER.finest("REMOVE: Is invoked");
 		int value;
 	
@@ -204,16 +203,6 @@ public class DHTOperations implements DHTUserInterface {
 	}
 	
 		
-	private byte[] serialize(Object o) {
-		//TODO: Serializamos el objeto o (operacion, nodos, etc)
-		try {
-			return new byte[4];
-		} catch (Exception e) {
-			System.out.println("Error: Incremento del contador erroneo");
-			System.out.println("Exception: " + e);
-		}
-		return null;
-	}
-
+	
 
 }

@@ -4,7 +4,7 @@ import java.io.Serializable;
 //import java.util.Set;
 import java.util.HashMap;
 
-public class OperationsDHT implements Serializable {
+public class Operations implements Serializable {
 
 	private static final long serialVersionUID = 1L;
 	private OperationEnum operation;
@@ -21,16 +21,14 @@ public class OperationsDHT implements Serializable {
 	// private ArrayList<Integer>
 
 	// PUT_MAP
-	public OperationsDHT (OperationEnum operation,
-			DHT_Map map, 
-			boolean isReplica)           {
+	public Operations (OperationEnum operation,
+			DHT_Map map){
 		this.operation = operation;
 		this.map       = map;
-		this.isReplica = isReplica;
 	}
 
 	// GET_MAP REMOVE_MAP CONTAINS_KEY_MAP
-	public OperationsDHT (OperationEnum operation,
+	public Operations (OperationEnum operation,
 			String key,           
 			boolean isReplica) {
 		this.operation = operation;
@@ -39,26 +37,26 @@ public class OperationsDHT implements Serializable {
 	}
 
 	// KEY_SET_HM, VALUES_HM, INIT	
-	public OperationsDHT (OperationEnum operation) {
+	public Operations (OperationEnum operation) {
 		this.operation = operation;
 	}
 
 	//RETURN_VALUE
-	public OperationsDHT (OperationEnum operation,
+	public Operations (OperationEnum operation,
 			Integer value)           {
 		this.operation = operation;
 		this.value     = value;
 	}
 
 	//RETURN_STATUS
-	public OperationsDHT (OperationEnum operation,
+	public Operations (OperationEnum operation,
 			boolean status)           {
 		this.operation  = operation;
 		this.status     = status;
 	}
 
 	//DATA_REPLICA
-	public OperationsDHT ( OperationEnum operation, 
+	public Operations ( OperationEnum operation, 
 			DHTUserInterface dht, int posReplica, int posServer) {
 		this.operation   = operation;
 		this.dht         = dht;
@@ -67,7 +65,7 @@ public class OperationsDHT implements Serializable {
 	}
 
 	//DHT_REPLICA
-	public OperationsDHT ( OperationEnum operation, 
+	public Operations ( OperationEnum operation, 
 			HashMap<Integer, String> DHTServers) {
 		this.operation   = operation;
 		this.DHTServers  = DHTServers;
