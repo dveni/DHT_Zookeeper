@@ -135,6 +135,10 @@ public class TableManager {
 		return DHTServers;
 	}
 	
+	public void setDHTServers(HashMap<Integer, String> dhtServers) {
+		this.DHTServers= dhtServers;
+	}
+	
 	public String printDHTServers() {
 		String aux = "DHTManager: Servers => [";
 		for (int i = 0; i < nServersMax; i++) {
