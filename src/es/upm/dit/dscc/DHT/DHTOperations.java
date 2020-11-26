@@ -56,7 +56,7 @@ public class DHTOperations implements DHTUserInterface {
 		
 		//Cuando se borre la operacion porque ya ha terminado de ejecutarse, 
 		// deberá saltar un watcher que notifique a este mutex para responder al cliente
-		
+		LOGGER.finest("Entremos en mutex.sendOperation()");
 		operation = mutex.sendOperation();
 		LOGGER.finest("Returned value in put: " + operation.getValue());
 		return operation.getValue();

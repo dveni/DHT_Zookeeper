@@ -39,7 +39,7 @@ public class operationBlocking {
 			System.out.println("Invoke sendOperation while no waiting");
 			return;
 		}
-		
+		LOGGER.finest("receiveOperation has ben invoked!!");
 		waiting = false;
 		this.operation = operation;
 		notifyAll();

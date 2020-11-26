@@ -434,7 +434,7 @@ public class zkMember implements Watcher {
 
 			// TODO MEJORA DE LANZAR SERVERS AUTOMATICAMENTE CUANDO NO HAY QUORUM (PERO LO HA HABIDO PREVIAMENTE)
 			// DESCOMENTAR
-			
+			/*
 			if (firstQuorum && nServers < 3) {
 				if (isLeader()) {
 					try {
@@ -447,7 +447,7 @@ public class zkMember implements Watcher {
 						System.out.println("Exception starting automatic server...: " + e);
 					}
 				}
-			}	
+			}	*/
 			return false;
 			
 		} else {
@@ -692,7 +692,13 @@ public class zkMember implements Watcher {
 							Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT);
 					System.out.println(response);
 				}
-
+				s = zk.exists(lockPath, false);
+				if (s == null) {
+					
+					// Created the znode, if it is not created.
+					zk.create(lockPath, new byte[0], 
+							Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT);
+				}
 				s = zk.exists(rootOperations, false);
 				List<String> list = zk.getChildren(rootOperations, watcherOperation, s);
 				System.out.println("Operations in Zookeeper Cluster # operations:" + list.size());
@@ -711,14 +717,7 @@ public class zkMember implements Watcher {
 		if (zk != null) {
 			// Create a folder for locknode and include this process/server
 			try {
-				Stat s = zk.exists(lockPath, false);
-				if (s == null) {
-					int data = 0;
-					byte[] d = ByteBuffer.allocate(4).putInt(data).array();
-					// Created the znode, if it is not created.
-					zk.create(lockPath, d, 
-							Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT);
-				}
+				Stat s = zk.exists(lockPath, false); //this);
 				// Set watcher on lockpath
 				List<String> list = zk.getChildren(lockPath, false, s);
 				System.out.println("Locks in Zookeeper Cluster # Locks:" + list.size());
@@ -778,13 +777,15 @@ public class zkMember implements Watcher {
 				// Al borrar el nodo saltará un watcher al resto de clientes
 				Stat s = zk.exists(leaderPath, false);
 				zk.delete(leaderPath, s.getVersion());
+				LOGGER.finest("Lock que ha hecho la operacion borrado: " + leaderPath);
 				return true;
 			} else {
 				//NO ES EL LIDER
-				System.out.println("[Process: " + lockId + "] - I AM NO THE LEADER! - Setting watch on node with path: " + leaderPath);				 
-				System.out.println("The leader is: " + leader);
 				//Ponemos watcher solo en el lider
 				Stat s = zk.exists(leaderPath, watcherLock);
+				System.out.println("[Process: " + lockId + "] - I AM NO THE LEADER! - Setting watch on node with path: " + leaderPath);				 
+				System.out.println("The leader is: " + leader);
+				
 				// Comprobamos si existe el lider
 				if (s==null) {
 					// No existe, vuelvo a realizar la eleccion de lider
@@ -815,7 +816,8 @@ public class zkMember implements Watcher {
 			Collections.sort(list);
 			String leader = list.get(0);
 			String operationPath = rootOperations + "/" + leader;
-			
+			LOGGER.fine("The operation path is: " + operationPath);
+
 			Stat s = zk.exists(operationPath, false);
 			byte[] data = zk.getData(operationPath, false, s);
 			zOpData deserializedData = DataSerialization.deserialize(data);
@@ -834,9 +836,14 @@ public class zkMember implements Watcher {
 				int[] answer = deserializedData.getAnswer();
 				// Metemos el valor en el primer valor vacio de answer
 				for(int i = 0; i< answer.length; i++) {
-					if(answer[i] == 0)
-						answer[i] = value; 
+					if(answer[i] == 0) {
+						answer[i] = value;
+						break;
+					}
 				}
+				LOGGER.fine("The value produced bt putMsg(map) is: " + value);
+				LOGGER.fine("The answer array now has in the position 0: " + answer[0]);
+				LOGGER.fine("The answer array now has in the position 1: " + answer[1]);
 				// Actualizamos el valor de la operacion y la respuesta
 				deserializedData.setOperation(operation);
 				deserializedData.setAnswer(answer);

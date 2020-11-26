@@ -93,14 +93,15 @@ public class zkOperation implements Watcher{
 				}
 
 				// Create a znode for registering as member and get my id
-				operationId = zk.create(rootOperations + aOperation, data, 
+				pathToOperation = zk.create(rootOperations + aOperation, data, 
 						Ids.OPEN_ACL_UNSAFE, CreateMode.EPHEMERAL_SEQUENTIAL);
-				Stat opStat = zk.exists(operationId, false);
-				byte[] opData = zk.getData(operationId, watcherData, opStat);
+				// Cuando hace esto los watcher ya han hecho la operacion
+				
+				Stat opStat = zk.exists(pathToOperation, false);
+				byte[] opData = zk.getData(pathToOperation, watcherData, opStat);
 				zOpData reconstructedData = DataSerialization.deserialize(opData);
 				
-				pathToOperation = operationId;
-				operationId = operationId.replace(rootOperations + "/", "");
+				operationId = pathToOperation.replace(rootOperations + "/", "");
 				List<String> list = zk.getChildren(rootOperations, false, s); //this, s);
 
 				System.out.println("Created znode operation id:"+ operationId );
@@ -223,14 +224,18 @@ public class zkOperation implements Watcher{
 				byte[] opData = zk.getData(pathToOperation, false, opStat);
 				zOpData reconstructedData = DataSerialization.deserialize(opData);
 				int[] answer = reconstructedData.getAnswer();
+				LOGGER.fine("The operation path is: " + pathToOperation);
+				LOGGER.fine("The answer array now has in the position 0: " + answer[0]);
+				LOGGER.fine("The answer array now has in the position 1: " + answer[1]);
 				// Por defecto se inicializa con todo ceros
 				// Si la respuesta de algun server es cero, aun no ha ejecutado la operacion 
 				
 				boolean allServersPerformedOp = true;
 				for(int i= 0; i<answer.length; i++) {
-					if(answer[i]==0)
+					if(answer[i]==0) {
 						allServersPerformedOp = false;
 						LOGGER.warning("watcherData: Server at pos" + i +" has not perfomed the operation yet");
+					}
 				}
 				
 				if(allServersPerformedOp ) {
@@ -240,8 +245,8 @@ public class zkOperation implements Watcher{
 					mutex.receiveOperation(operation);
 					//Borramos el nodo op cuando se ha realizado
 					// Al borrar el nodo saltará un watcher al resto de clientes
-					Stat s = zk.exists(leaderPath, false);
-					zk.delete(leaderPath, s.getVersion());
+					Stat s = zk.exists(pathToOperation, false);
+					zk.delete(pathToOperation, s.getVersion());
 				}
 				
 			} catch (Exception e) {
