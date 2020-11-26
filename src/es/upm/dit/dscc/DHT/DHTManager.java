@@ -27,32 +27,11 @@ public class DHTManager implements DHTUserInterface {
 	public DHTManager() {
 
 		LOGGER.fine("Start of configuration of the new Server | Zookeeper Cluster");
-		InetAddress localhost;
-		String ip;
-        String hostname;
-        
-		try {
-			//TODO REVISAR ESTO MUY BIEN << BORRAR, NO VALE PARA NADA
-			//127.0.0.1/nombreTerminal
-			localhost = InetAddress.getLocalHost();
-			//127.0.0.1
-			ip = localhost.getHostAddress();
-			//nombreTerminal
-            hostname = localhost.getHostName();
-            System.out.println("New Server: IP Addres: " + ip + " | Hostname: " + hostname);
-            //TODO FALTA EL PORT --> ¿PASAR COMO PARAMETRO Y COGER EN EL MAIN???
-            
-		} catch (Exception e) {
-			LOGGER.severe("Error to create the Zookeeper Cluster");
-		}
-
 		if (!endConfigure) {
 			configure();
 		}
-		
 		this.localAddress = zkMember.getLocalAddress();
 		this.tableManager.setLocalAddress(this.localAddress);
-
 		LOGGER.fine("End of configuration of the new Server | Zookeeper Cluster | LocalAddress: " + this.localAddress);
 	}
 
