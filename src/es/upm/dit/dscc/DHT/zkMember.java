@@ -747,17 +747,14 @@ public class zkMember implements Watcher {
 		public void process(WatchedEvent event) {
 			System.out.println("------------------------------------Watcher Operation------------------------------------\n");
 			try {
-				List<String> list = zk.getChildren(rootOperations, false); // this);
+				List<String> list = zk.getChildren(rootOperations, watcherOperation); // this);
 				System.out.println("Operations in Zookeeper Cluster # Operations:" + list.size());
 				if (list.size()>0) {
-					
+					LOGGER.finest("New operation to be done");
 					printListMembers(list);
 					configLock();
 					operationLeader();
 					LOGGER.finest("Watcher operation finalizado");
-				}else {
-					list = zk.getChildren(rootOperations, watcherOperation); // this);
-					System.out.println("Operations in Zookeeper Cluster # Operations:" + list.size());
 				}
 				
 			} catch (Exception e) {
@@ -767,11 +764,16 @@ public class zkMember implements Watcher {
 	};
 	
 	private boolean operationLeader() {
+		Integer intentos = 0;
+		
+			
+		
 		System.out.println("------------------IS LOCK LEADER?------------------\n");
 		try {
 			List<String> list = zk.getChildren(lockPath,  false);
 			Collections.sort(list);
 			int index = list.indexOf(lockId.substring(lockId.lastIndexOf('/') + 1));
+			
 			String leader = list.get(0);
 			leaderPath = lockPath + "/" + leader;
 			if(index == 0) {
@@ -787,6 +789,7 @@ public class zkMember implements Watcher {
 				Stat s = zk.exists(leaderPath, false);
 				zk.delete(leaderPath, s.getVersion());
 				LOGGER.finest("Lock que ha hecho la operacion borrado: " + leaderPath);
+				
 				return true;
 			} else {
 				//NO ES EL LIDER
@@ -795,6 +798,13 @@ public class zkMember implements Watcher {
 				System.out.println("[Process: " + lockId + "] - I AM NO THE LEADER! - Setting watch on node with path: " + leaderPath);				 
 				System.out.println("The leader is: " + leader);
 				
+				//TODO: Gestion de nodos cuando no son lideres hardcoded
+				while(intentos < 2) {
+					Thread.sleep(1000);
+					operationLeader();
+					intentos++;
+				}
+				/*
 				// Comprobamos si existe el lider
 				if (s==null) {
 					LOGGER.finest("Lider no existe, vuelvo a realizar la eleccion de lider. s == null: " + s); 
@@ -806,6 +816,7 @@ public class zkMember implements Watcher {
 							LOGGER.finest("Lider si existe, me quedo esperando a notificacion (llega con un watcher) y realizo la eleccion del lider"); 
 
 							mutexZkMember.wait();
+							
 							LOGGER.finest("Lock en mutex.wait"); 
 							operationLeader();
 						}
@@ -813,6 +824,7 @@ public class zkMember implements Watcher {
 						System.out.println("Exception: " + e);
 					}
 				}
+				*/
 				return false;
 			}
 		} catch (Exception e) {
@@ -820,6 +832,7 @@ public class zkMember implements Watcher {
 			System.out.println("Exception: "+ e);
 			return false;
 		}
+		
 	}
 	
 	private boolean doOperation() {

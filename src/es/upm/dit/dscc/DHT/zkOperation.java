@@ -192,6 +192,8 @@ public class zkOperation implements Watcher{
 					// Al borrar el nodo saltará un watcher al resto de clientes
 					Stat s = zk.exists(pathToOperation, false);
 					zk.delete(pathToOperation, s.getVersion());
+				}else {
+					Stat s = zk.exists(pathToOperation, watcherData);
 				}
 				
 			} catch (Exception e) {
