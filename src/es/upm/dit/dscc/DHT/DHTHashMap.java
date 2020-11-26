@@ -86,5 +86,11 @@ public class DHTHashMap implements DHTUserInterface, Serializable{
 		return aux;
 	}
 
+	@Override
+	public Integer getMsg(String key) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
 
 }

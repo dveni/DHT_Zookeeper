@@ -11,6 +11,8 @@ public interface DHTUserInterface {
 	Integer putMsg(DHT_Map map);
 
 	Integer get(String key);
+	
+	Integer getMsg(String key);
 
 	Integer remove(String key);
 

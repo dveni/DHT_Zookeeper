@@ -745,16 +745,21 @@ public class zkMember implements Watcher {
 	// Notified when the number of children in /operations is updated
 	private Watcher watcherOperation = new Watcher() {
 		public void process(WatchedEvent event) {
-			System.out.println("------------------------------------Watcher Operation------------------------------------\n");
+			
 			try {
 				List<String> list = zk.getChildren(rootOperations, watcherOperation); // this);
-				System.out.println("Operations in Zookeeper Cluster # Operations:" + list.size());
+				
 				if (list.size()>0) {
+					System.out.println("------------------------------------Watcher Operation------------------------------------\n");
+					System.out.println("Operations in Zookeeper Cluster # Operations:" + list.size());
 					LOGGER.finest("New operation to be done");
 					printListMembers(list);
 					configLock();
 					operationLeader();
 					LOGGER.finest("Watcher operation finalizado");
+				}else {
+					System.out.println("------------------------------------Operation finished------------------------------------\n");
+					System.out.println(">>> Enter option: 1) Put. 2) Get. 3) Remove. 4) ContainKey  5) Values 7) Init 0) Exit");	
 				}
 				
 			} catch (Exception e) {
@@ -800,7 +805,7 @@ public class zkMember implements Watcher {
 				
 				//TODO: Gestion de nodos cuando no son lideres hardcoded
 				while(intentos < 2) {
-					Thread.sleep(1000);
+					//Thread.sleep(1000);
 					operationLeader();
 					intentos++;
 				}
@@ -855,11 +860,32 @@ public class zkMember implements Watcher {
 			}
 			if(nodeMustDoOperation) {
 				Operations operation = deserializedData.getOperation();
-				DHT_Map map = operation.getMap();
+				int value=0;
+				String key = "";
+				OperationEnum opType = operation.getOperation();
+				switch(opType) {
+				case PUT_MAP:
+					DHT_Map map = operation.getMap();
+					value = dht.putMsg(map);
+					operation.setValue(value);
+					
+					break;
+				case GET_MAP:
+					key = operation.getKey();
+					value = dht.getMsg(key);
+					operation.setValue(value);
+					break;
+				case REMOVE_MAP:
+					key = operation.getKey();
+					value = dht.removeMsg(key);
+					operation.setValue(value);
+					break;
+					
+				default:
+					break;
+				}
 				
-				//TODO: Switch para cada tipo de operacion 
-				int value = dht.putMsg(map);
-				operation.setValue(value);
+				
 				int[] answer = deserializedData.getAnswer();
 				// Metemos el valor en el primer valor vacio de answer
 				for(int i = 0; i< answer.length; i++) {

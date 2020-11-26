@@ -29,11 +29,9 @@ public class Operations implements Serializable {
 
 	// GET_MAP REMOVE_MAP CONTAINS_KEY_MAP
 	public Operations (OperationEnum operation,
-			String key,           
-			boolean isReplica) {
+			String key) {
 		this.operation = operation;
 		this.key       = key;
-		this.isReplica = isReplica;
 	}
 
 	// KEY_SET_HM, VALUES_HM, INIT	

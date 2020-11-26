@@ -78,31 +78,31 @@ public class DHTOperations implements DHTUserInterface {
 	@Override
 	public Integer get(String key) {
 
-		java.util.List<String> DHTReplicas = new java.util.ArrayList<String>();
-		Operations operation; 
-
-		for (Iterator<String> iterator = DHTReplicas.iterator(); iterator.hasNext();) {
-			String address = (String) iterator.next();
-			LOGGER.finest("PUT: The operation is replicated");
-			if (tableManager.isDHTLocalReplica(key, address)) {
-				LOGGER.fine("PUT: Local replica");
-				return getLocal(key);
-			}
-		}
-
-		// Notify the operation to the cluster
-		if (tableManager.isDHTLocal(key)) {
-			LOGGER.finest("GET: The operation is local");
-			return getLocal(key);
-		} else {
-			//TODO
-			//sendMessages.sendGet(tableManager.DHTAddress(key), key, false);
-			operation = mutex.sendOperation();
-			LOGGER.fine("Returned value in get: " + operation.getValue());
-			return operation.getValue();
-		}
+		LOGGER.finest("GET: Is invoked");
+		Operations operation = new Operations(OperationEnum.GET_MAP, key); 	
+		// Create the array of nodes where map should be stored
+		int nodes[] = tableManager.getNodes(key);
+		
+		zOpData opData = new zOpData(operation, nodes, nReplica);
+		
+		//Serializar datos de operacion (put map) y nodos que deben hacerla 
+		byte[] data = DataSerialization.serialize(opData);
+		
+		// Creamos zNode con operacion y sus datos 
+		zkOperation op = new zkOperation(data, mutex);
+		
+		//Cuando se borre la operacion porque ya ha terminado de ejecutarse, 
+		// deberá saltar un watcher que notifique a este mutex para responder al cliente
+		LOGGER.finest("Entremos en mutex.sendOperation()");
+		operation = mutex.sendOperation();
+		LOGGER.finest("Returned value in put: " + operation.getValue());
+		return operation.getValue();
 	}
-
+	@Override
+	public Integer getMsg(String key) {
+		
+		return getLocal(key);
+	}
 	private Integer getLocal(String key) {
 		DHTUserInterface  hashMap;
 		hashMap = tableManager.getDHT(key);
@@ -121,35 +121,25 @@ public class DHTOperations implements DHTUserInterface {
 	@Override
 	public Integer remove(String key) {
 
-		Operations operation; 
 		LOGGER.finest("REMOVE: Is invoked");
-		int value;
-	
-	
+		Operations operation = new Operations(OperationEnum.REMOVE_MAP, key); 	
 		// Create the array of nodes where map should be stored
 		int nodes[] = tableManager.getNodes(key);
 		
-		for (int i = 1; i < nodes.length; i++) {
-			if (tableManager.isDHTLocalReplica(nodes[i], key)) {
-				LOGGER.fine("PUT: Local replica");
-				value = removeLocal(key);
-			} else {
-				LOGGER.fine("REMOVE: Remote replica");
-				//TODO
-				//sendMessages.sendRemove(tableManager.DHTAddress(nodes[i]), key, true); 			
-			}
-		}
+		zOpData opData = new zOpData(operation, nodes, nReplica);
 		
-		if (tableManager.isDHTLocal(nodes[0])) {
-			LOGGER.finest("PUT: The operation is local");
-			return removeLocal(key);
-		} else {
-			//TODO
-			//sendMessages.sendRemove(tableManager.DHTAddress(nodes[0]), key, false);
-			operation = mutex.sendOperation();
-			LOGGER.finest("Returned value in put: " + operation.getValue());
-			return operation.getValue();
-		}
+		//Serializar datos de operacion (put map) y nodos que deben hacerla 
+		byte[] data = DataSerialization.serialize(opData);
+		
+		// Creamos zNode con operacion y sus datos 
+		zkOperation op = new zkOperation(data, mutex);
+		
+		//Cuando se borre la operacion porque ya ha terminado de ejecutarse, 
+		// deberá saltar un watcher que notifique a este mutex para responder al cliente
+		LOGGER.finest("Entremos en mutex.sendOperation()");
+		operation = mutex.sendOperation();
+		LOGGER.finest("Returned value in put: " + operation.getValue());
+		return operation.getValue();
 
 
 	}
