@@ -60,6 +60,7 @@ public class DHTOperations implements DHTUserInterface {
 		operation = mutex.sendOperation();
 		LOGGER.finest("Returned value in put: " + operation.getValue());
 		return operation.getValue();
+		
 	}
 	
 

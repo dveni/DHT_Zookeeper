@@ -18,6 +18,7 @@ import org.apache.zookeeper.CreateMode;
 import org.apache.zookeeper.WatchedEvent;
 import org.apache.zookeeper.KeeperException;
 import org.apache.zookeeper.Watcher;
+import org.apache.zookeeper.Watcher.Event.EventType;
 import org.apache.zookeeper.ZooDefs.Ids;
 import org.apache.zookeeper.ZooKeeper;
 import org.apache.zookeeper.data.Stat;
@@ -53,7 +54,7 @@ public class zkMember implements Watcher {
 	//LOCK
 	private static String lockPath = "/locknode";
 	private static String guidLock = "/guid-lock-";
-	private static Integer mutex = -10;
+	private static Integer mutexZkMember = -1;
 	private String lockId;
 	private static String leaderPath;
 	//DATA
@@ -746,11 +747,19 @@ public class zkMember implements Watcher {
 		public void process(WatchedEvent event) {
 			System.out.println("------------------------------------Watcher Operation------------------------------------\n");
 			try {
-				List<String> list = zk.getChildren(rootOperations, watcherOperation); // this);
+				List<String> list = zk.getChildren(rootOperations, false); // this);
 				System.out.println("Operations in Zookeeper Cluster # Operations:" + list.size());
-				printListMembers(list);
-				configLock();
-				operationLeader();
+				if (list.size()>0) {
+					
+					printListMembers(list);
+					configLock();
+					operationLeader();
+					LOGGER.finest("Watcher operation finalizado");
+				}else {
+					list = zk.getChildren(rootOperations, watcherOperation); // this);
+					System.out.println("Operations in Zookeeper Cluster # Operations:" + list.size());
+				}
+				
 			} catch (Exception e) {
 				System.out.println("Exception: watcherOperation");
 			}
@@ -788,13 +797,16 @@ public class zkMember implements Watcher {
 				
 				// Comprobamos si existe el lider
 				if (s==null) {
-					// No existe, vuelvo a realizar la eleccion de lider
+					LOGGER.finest("Lider no existe, vuelvo a realizar la eleccion de lider. s == null: " + s); 
 					operationLeader();
 				}else {
 					// Si existe, me quedo esperando a notificacion (llega con un watcher) y realizo la eleccion del lider
 					try {
-						synchronized (mutex) {
-							mutex.wait();
+						synchronized (mutexZkMember) {
+							LOGGER.finest("Lider si existe, me quedo esperando a notificacion (llega con un watcher) y realizo la eleccion del lider"); 
+
+							mutexZkMember.wait();
+							LOGGER.finest("Lock en mutex.wait"); 
 							operationLeader();
 						}
 					} catch (Exception e) {
@@ -831,6 +843,8 @@ public class zkMember implements Watcher {
 			if(nodeMustDoOperation) {
 				Operations operation = deserializedData.getOperation();
 				DHT_Map map = operation.getMap();
+				
+				//TODO: Switch para cada tipo de operacion 
 				int value = dht.putMsg(map);
 				operation.setValue(value);
 				int[] answer = deserializedData.getAnswer();
@@ -867,8 +881,8 @@ public class zkMember implements Watcher {
 				System.out.println("        Update!!");
 				
 				// Al recibir el watcher de cualquier nodo notifico a mi hebra de que levante el bloqueo
-				synchronized (mutex) {
-					mutex.notify();
+				synchronized (mutexZkMember) {
+					mutexZkMember.notify();
 				}
 				List<String> list = zk.getChildren(lockPath,  false);
 				System.out.println("Locks in Zookeeper Cluster # Locks:" + list.size());

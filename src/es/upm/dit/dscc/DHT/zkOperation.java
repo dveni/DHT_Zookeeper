@@ -31,7 +31,6 @@ public class zkOperation implements Watcher{
 	private java.util.logging.Logger LOGGER = DHTMain.LOGGER;
 	
 	
-	private int nReplica;	
 	private static final int SESSION_TIMEOUT = 5000;
 	//Nodo raiz
 	private static String rootOperations = "/operations";
@@ -39,7 +38,6 @@ public class zkOperation implements Watcher{
 	private static String aOperation = "/oper-";
 	private String operationId;
 	private String pathToOperation;
-	private static Integer mutexOp = -1;
 
 	
 	private operationBlocking mutex;
@@ -55,7 +53,6 @@ public class zkOperation implements Watcher{
 	public zkOperation (byte[] data, operationBlocking mutex) {
 		
 		this.mutex = mutex;
-		this.nReplica = nReplica;
 		// Select a random zookeeper server
 		Random rand = new Random();
 		int i = rand.nextInt(hosts.length);
@@ -119,54 +116,6 @@ public class zkOperation implements Watcher{
 	}
 	
 	
-	//Metodo para determinar si un znode op es el lider dentro del znode Operations
-		private boolean isLeader() {
-			System.out.println("------------------IS LOCK LEADER?------------------\n");
-			try {
-				List<String> list = zk.getChildren(rootOperations,  false);
-				Collections.sort(list);
-				int index = list.indexOf(operationId.substring(operationId.lastIndexOf('/') + 1));
-				String leader = list.get(0);
-				leaderPath = rootOperations + "/" + leader;
-				if(index == 0) {
-					//Es el lider
-					System.out.println("[Process: " + operationId + "] Next operation to be done");
-					
-					
-					
-					
-					return true;
-				} else {
-					//NO ES EL LIDER
-					System.out.println("[Process: " + operationId + "] - I AM NO THE LEADER! - Setting watch on node with path: " + leaderPath);				 
-					System.out.println("The leader is: " + leader);
-					//Ponemos watcher solo en el lider
-					Stat s = zk.exists(leaderPath, watcherMember);
-					// Comprobamos si existe el lider
-					if (s==null) {
-						// No existe, vuelvo a realizar la eleccion de lider
-						isLeader();
-					}else {
-						// Si existe, espero a que se termine de hacer esa operacion
-						
-						try {
-							synchronized (mutexOp) {
-								mutexOp.wait();
-								isLeader();
-							}
-						} catch (Exception e) {
-							System.out.println("Exception: " + e);
-						}
-					}
-					return false;
-				}
-			} catch (Exception e) {
-				System.out.println("Exception: select Leader");
-				System.out.println("Exception: "+ e);
-				return false;
-			}
-		}
-
 	// Notified when the session is created
 	private Watcher cWatcher = new Watcher() {
 		public void process (WatchedEvent e) {
@@ -201,11 +150,7 @@ public class zkOperation implements Watcher{
 		public void process(WatchedEvent event) {
 			System.out.println("------------------Watcher Member------------------\n");		
 			try {
-				// Al recibir el watcher de cualquier nodo notifico a mi hebra de que levante el bloqueo
-				synchronized (mutexOp) {
-					mutexOp.notify();
-				}
-				
+							
 				List<String> list = zk.getChildren(rootOperations,  false); //this);
 				printListMembers(list);
 				
