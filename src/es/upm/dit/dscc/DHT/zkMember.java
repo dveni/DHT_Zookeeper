@@ -40,7 +40,7 @@ public class zkMember implements Watcher {
 	
 	//DATA
 	private HashMap<Integer, String> backupServers;
-	private HashMap<Integer, DHTUserInterface> backupTables;
+	//private HashMap<Integer, DHTUserInterface> backupTables;
 	
 	//RUTAS ZOOKEEPER
 	//MEMBERS	
@@ -59,11 +59,16 @@ public class zkMember implements Watcher {
 	private static String leaderPath;
 	//DATA
 	private static String dhtServers = "/DHTServers";
-	private static String dhtTables = "/DHTTables";
+	private static String dhtTables0 = "/DHTTables0";
+	private static String dhtTables1 = "/DHTTables1";
+	private static String dhtTables2 = "/DHTTables2";
 
 	//ZOOKEEPER
 	private ZooKeeper zk;
 	String[] hosts = { "127.0.0.1:2181", "127.0.0.1:2181", "127.0.0.1:2181" };
+
+	//JAR PATH
+	private String pathJar = System.getProperty("user.dir") + "/target/DHT2020.jar";
 
 	//CONSTRUCTOR
 	public zkMember(int nServersMax, int nReplica, TableManager tableManager, DHTUserInterface dht) {
@@ -100,14 +105,17 @@ public class zkMember implements Watcher {
 			try {
 				//2.1: Guardamos en /dhtServers DHTServers (para mantener el orden)
 				Stat s2 = zk.exists(dhtServers, false);
-				Stat s3 = zk.exists(dhtTables, false);
-				if (s2 == null && s3 == null) {
+				Stat s3 = zk.exists(dhtTables0, false);
+				Stat s4 = zk.exists(dhtTables1, false);
+				Stat s5 = zk.exists(dhtTables2, false);
+				if (s2 == null && s3 == null && s4 == null && s5 == null) {
 					zk.create(dhtServers, new byte[0], Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT);
-					zk.create(dhtTables, new byte[0], Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT);
+					zk.create(dhtTables0, new byte[0], Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT);
+					zk.create(dhtTables1, new byte[0], Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT);
+					zk.create(dhtTables2, new byte[0], Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT);
 				} else {
 					this.backupServers = getServersFromZnode();
-					this.backupTables = getTablesFromZnode();
-					putDHTServers(backupServers, backupTables);
+					putDHTServers(backupServers);
 				}
 				
 				//2.2: Creamos /rootMembers
@@ -122,10 +130,32 @@ public class zkMember implements Watcher {
 				this.localAddress = myId;
 				this.tableManager.setLocalAddress(myId);
 				
-				
 				//2.3 Añadimos el nuevo znode a todas las tablas con manageZnodes
 				List<String> list = zk.getChildren(rootMembers, false, s);
 				manageZnodes(list);
+				
+				position = tableManager.getPosition(myId);
+				
+				if (nServers == 3) {
+					HashMap<Integer, DHTUserInterface> DHTTables = tableManager.getDHTTables();
+					HashMap<Integer, DHTUserInterface> newDHTTables0 = getTablesFromZnode(dhtTables0);
+					HashMap<Integer, DHTUserInterface> newDHTTables1 = getTablesFromZnode(dhtTables1);
+					HashMap<Integer, DHTUserInterface> newDHTTables2 = getTablesFromZnode(dhtTables2);
+					if (newDHTTables2 == null) {
+						newDHTTables2 = new HashMap<Integer, DHTUserInterface>();
+					} else {
+						if (position==0) {
+							DHTTables.put(0, newDHTTables0.get(0));
+							DHTTables.put(2, newDHTTables2.get(2));
+						} else if (position==1) {
+							DHTTables.put(0, newDHTTables0.get(0));
+							DHTTables.put(1, newDHTTables1.get(1));
+						} else {
+							DHTTables.put(1, newDHTTables1.get(1));
+							DHTTables.put(2, newDHTTables2.get(2));
+						}
+					}
+				}
 				
 				//Ponemos watcher para gestionar los servidores nuevos
 				s = zk.exists(rootMembers, false);
@@ -136,19 +166,18 @@ public class zkMember implements Watcher {
 				System.out.println("--------------------------------------------------------------------------------------");
 				System.out.println("Znodes in Zookeeper Cluster # members:" + list.size());
 				printListMembers(list);
-				
-				position = tableManager.getPosition(myId);
-				
-				// BORRAR, NO SE UTILIZA
-				//TODO Ponemos un watcher apuntando al rootMembers para cuando se añada un server al que mandarle la info
-				//s = zk.exists(rootMembers, false);
-				//zk.getData(rootMembers, watcherTransferData, s);
-				
+			
 				
 				//2.4 Solo lo ejecuta el primer servidor del cluster para actualizar los backups
 				if (isLeader()) {
 					setServersToZnode(tableManager.getDHTServers());
-					setTablesToZnode(tableManager.getDHTTables());
+				}
+				if (position==0) {
+					setTablesToZnode(tableManager.getDHTTables(), dhtTables0);
+				} else if (position==1) {
+					setTablesToZnode(tableManager.getDHTTables(), dhtTables1);
+				} else {
+					setTablesToZnode(tableManager.getDHTTables(), dhtTables2);
 				}
 				
 				//Configuracion para poner watcher sobre /rootoperations
@@ -184,9 +213,17 @@ public class zkMember implements Watcher {
 			if (s4 != null) {
 				zk.delete(lockPath, s4.getVersion());
 			}	
-			Stat s5 = zk.exists(dhtTables, false);
+			Stat s5 = zk.exists(dhtTables0, false);
 			if (s5 != null) {
-				zk.delete(dhtTables, s5.getVersion());
+				zk.delete(dhtTables0, s5.getVersion());
+			}
+			Stat s6 = zk.exists(dhtTables1, false);
+			if (s6 != null) {
+				zk.delete(dhtTables1, s6.getVersion());
+			}
+			Stat s7 = zk.exists(dhtTables2, false);
+			if (s7 != null) {
+				zk.delete(dhtTables2, s7.getVersion());
 			}
 		} catch (Exception e) {
 			LOGGER.warning("ERROR WHILE RESETING DATA IN ZOOKEEPER");	
@@ -234,7 +271,13 @@ public class zkMember implements Watcher {
 				manageZnodes(list);
 				if (isLeader()) {
 					setServersToZnode(tableManager.getDHTServers());
-					setTablesToZnode(tableManager.getDHTTables());
+				}
+				if (position==0) {
+					setTablesToZnode(tableManager.getDHTTables(), dhtTables0);
+				} else if (position==1) {
+					setTablesToZnode(tableManager.getDHTTables(), dhtTables1);
+				} else {
+					setTablesToZnode(tableManager.getDHTTables(), dhtTables2);
 				}
 				LOGGER.fine(tableManager.printDHTServers());
 				System.out.println("Znodes in Zookeeper Cluster # members:" + list.size());
@@ -247,74 +290,6 @@ public class zkMember implements Watcher {
 		}
 	};
 	
-	// TODO: Ver donde lo mandamos BORRAR, NO SE UTILIZA
-	// WatcherTransferData: cuando se añade un server y queremos mandarle los datos
-	private Watcher watcherTransferData = new Watcher() {
-		public void process(WatchedEvent event) {
-			System.out.println("------------------------------------Transfer Data------------------------------------\n");
-			try {
-				//Asi conseguimos que solo envie datos un servidor
-				if (isLeader()) {
-					//Obtenemos direccion a la que enviar, y la eliminamos del rootMember
-					String newServer = getAddressFromZnode();
-					System.out.println("There is a new Server. Sending data to: " + newServer + " | Zookeeper Cluster");		
-					transferData(newServer);		
-				}
-				//Configuramos el watcher para el siguiente
-				Stat s = zk.exists(rootMembers, false);
-				zk.getData(rootMembers, watcherTransferData, s);
-				System.out.println(">>> Enter option: 1) Put. 2) Get. 3) Remove. 4) ContainKey  5) Values 7) Init 0) Exit");
-			} catch (Exception e) {
-				System.out.println("Exception: watcherTransferData");
-			}
-		}
-	};
-
-	// Metodo para que un server añada su myId a rootMember y pueda recibir info
-	private void setAddressToZnode(String address) {
-		byte[] byteArrayAddress = null;
-		try {
-			byteArrayAddress = address.getBytes();
-		} catch (Exception e) {
-			System.out.println("Error: setAddressToZnode");
-			System.out.println("Error while serializing object");
-			System.out.println("Exception: " + e);
-		}
-		try {
-			Stat s = zk.exists(rootMembers, false);
-			zk.setData(rootMembers, byteArrayAddress, s.getVersion());
-		} catch (Exception e) {
-			System.out.println("Error: setAddressToZnode");
-			System.out.println("Error while setting data to ZK");
-			System.out.println("Exception: " + e);
-		}
-	}
-
-	// Metodo para conseguir el myId almacenado en rootMember y se envie info a este server
-	private String getAddressFromZnode() {
-		Stat s = new Stat();
-		byte[] data = null;
-		String address = new String();
-		try {
-			s = zk.exists(rootMembers, false);
-			data = zk.getData(rootMembers, false, s);
-		} catch (Exception e) {
-			System.out.println("Error: getAddressFromZnode");
-			System.out.println("Error while getting data from ZK");
-			System.out.println("Exception: " + e);
-		}
-		if (data != null) {
-			try {
-				address = new String(data);
-			} catch (Exception e) {
-				System.out.println("Error: getAddressFromZnode");
-				System.out.println("Error while deserializing object");
-				System.out.println("Exception: " + e);
-			}	
-		}
-		return address;
-	}
-
 	// Metodos para controlar coherencia de DHTServers con Zookeeper
 	private void setServersToZnode(HashMap<Integer, String> DHTServers) {
 		byte[] byteDHTServers = null;
@@ -368,7 +343,7 @@ public class zkMember implements Watcher {
 	}
 
 	// Metodos para controlar coherencia de DHTServers con Zookeeper
-	private void setTablesToZnode(HashMap<Integer, DHTUserInterface> DHTTables) {
+	private void setTablesToZnode(HashMap<Integer, DHTUserInterface> DHTTables, String path) {
 		byte[] byteDHTTables = null;
 		try {
 			ByteArrayOutputStream bos = new ByteArrayOutputStream();
@@ -382,8 +357,8 @@ public class zkMember implements Watcher {
 			System.out.println("Exception: " + e);
 		}
 		try {
-			Stat s = zk.exists(dhtTables, false);
-			zk.setData(dhtTables, byteDHTTables, s.getVersion());
+			Stat s = zk.exists(path, false);
+			zk.setData(path, byteDHTTables, s.getVersion());
 		} catch (Exception e) {
 			System.out.println("Error: setTablesToZnode");
 			System.out.println("Error while setting data to ZK");
@@ -392,17 +367,17 @@ public class zkMember implements Watcher {
 	}
 
 	// Metodos para controlar coherencia de DHTServers con Zookeeper
-	private HashMap<Integer, DHTUserInterface> getTablesFromZnode() {
+	private HashMap<Integer, DHTUserInterface> getTablesFromZnode(String path) {
 		Stat s = new Stat();
 		byte[] data = null;
 		HashMap<Integer, DHTUserInterface> DHTTablesFromZnode = new HashMap<Integer, DHTUserInterface>();
 		try {
-			s = zk.exists(dhtTables, false);
-			data = zk.getData(dhtTables, false, s);
+			s = zk.exists(path, false);
+			data = zk.getData(path, false, s);
 		} catch (Exception e) {
-			System.out.println("Error: getTablesFromZnode");
-			System.out.println("Error while getting data from ZK");
-			System.out.println("Exception: " + e);
+			//System.out.println("Error: getTablesFromZnode");
+			//System.out.println("Error while getting data from ZK");
+			//System.out.println("Exception: " + e);
 		}
 		// Deserialize: Convert an array of Bytes in an operation.
 		if (data != null) {
@@ -411,9 +386,10 @@ public class zkMember implements Watcher {
 				ObjectInputStream in = new ObjectInputStream(bis);
 				DHTTablesFromZnode = (HashMap<Integer, DHTUserInterface>) in.readObject();
 			} catch (Exception e) {
-				System.out.println("Error: getTablesFromZnode");
-				System.out.println("Error while deserializing object");
-				System.out.println("Exception: " + e);
+				//System.out.println("Error: getTablesFromZnode");
+				//System.out.println("Error while deserializing object");
+				//System.out.println("Exception: " + e);
+				DHTTablesFromZnode = null;
 			}
 		}
 		return DHTTablesFromZnode;
@@ -435,20 +411,20 @@ public class zkMember implements Watcher {
 
 			// TODO MEJORA DE LANZAR SERVERS AUTOMATICAMENTE CUANDO NO HAY QUORUM (PERO LO HA HABIDO PREVIAMENTE)
 			// DESCOMENTAR
-			/*
+			
 			if (firstQuorum && nServers < 3) {
 				if (isLeader()) {
 					try {
 						System.out.println("Zookeeper Cluster | Starting a new server...");
 						String[] command = { "gnome-terminal", "--window", "-x", "bash", "-c",
-								"java es.upm.dit.dscc.DHT.DHTMain; exec bash" };
-								//"java -jar nombreDelJar.jar; exec bash" };
+								//"java es.upm.dit.dscc.DHT.DHTMain; exec bash" };
+								"java -jar " + pathJar + "; exec bash" };
 						Process proc = new ProcessBuilder(command).start();
 					} catch (IOException e) {
 						System.out.println("Exception starting automatic server...: " + e);
 					}
 				}
-			}	*/
+			}	
 			return false;
 			
 		} else {
@@ -492,7 +468,7 @@ public class zkMember implements Watcher {
 						isQuorum = true;
 						System.out.println("THERE IS QUORUM | NOW, YOU CAN DO OPERATIONS | Zookeeper Cluster");
 						// A server crashed and is a new one
-						if (firstQuorum) { //TODO CREO QUE ESTO NO VALE PARA NADA
+						if (firstQuorum) {
 							// A previous quorum existed. Then tolerate the fail
 							// Add the new one in the DHTServer
 							String failedServer = newServer(newZnodes);
@@ -502,10 +478,6 @@ public class zkMember implements Watcher {
 							if (DHTServers == null) {
 								LOGGER.warning("DHTServers is null!!");
 							}
-							// Send the Replicas
-							// TODO AQUI PONER EL WATCHER PARA ENVIAR DATOS AL NUEVO SERVER
-							// ESTO SOLO HAY QUE HACERLO SI CAMBIAMOS LA FORMA DE ENVIAR LAS TABLAS
-							//setAddressToZnode(failedServer);
 							pendingReplica = true;
 						} else {
 							firstQuorum = true;
@@ -575,70 +547,7 @@ public class zkMember implements Watcher {
 	public String newServer(List<String> newZnodes) {
 		return newZnodes.get(newZnodes.size() - 1);
 	}
-	
-	//TODO: BORRAR NO SE UTILIZA
-	public void transferData(String address) {
-		HashMap<Integer, String> DHTServers = tableManager.getDHTServers();
-		HashMap<Integer, DHTUserInterface> DHTTables = tableManager.getDHTTables();
-
-		if (pendingReplica) {
-			pendingReplica = false;
-		} else {
-			return;
-		}
-
-		if (!address.equals(failedServerTODO)) {
-			LOGGER.severe("!!!!!!! address != failedServerTODO");
-		}
-
-		int i = 0;
-		int posNew = 0;
-		for (i = 0; i < nServersMax; i++) {
-			if (address.equals(DHTServers.get(i))) {
-				posNew = i;
-				break;
-			}
-		}
-
-		int posLocal = 0;
-		for (i = 0; i < nServersMax; i++) {
-			if (localAddress.equals(DHTServers.get(i))) {
-				posLocal = i;
-				break;
-			}
-		}
-		LOGGER.fine("Check whether sending table (-1) from " + posLocal + " to " + posNew);
-		int posNext = (posNew + 1) % nServersMax;
-		if (posLocal == posNext) {
-			LOGGER.fine("pos: " + posNew + " local: " + posLocal + " address: " + address);
-			Set<String> hashMap = DHTTables.get(posNew).keySet();
-			for (Iterator<String> iterator = hashMap.iterator(); iterator.hasNext();) {
-				String key = (String) iterator.next();
-				LOGGER.fine("posNew + " + posNew + " key: " + key);
-				// TODO desde aqui llamar a las operaciones??
-				// sendMessages.sendPut(address, new DHT_Map(key, DHTTables.get(posNew).get(key)), true);
-			}
-		}
-		LOGGER.fine("Check whether sending table (0) from " + posLocal + " to " + posNew);
-		// send the second replica of the previous
-		for (int j = 1; j < nReplica; j++) {
-			int posPrev = (posNew - j) % nServersMax;
-			if (posPrev < 0) {
-				posPrev = posPrev + nServersMax;
-			}
-			if (posLocal == posPrev) {
-				LOGGER.fine("replica: " + posNext + " address: " + address);
-				Set<String> hashMap = DHTTables.get(posLocal).keySet();
-				for (Iterator<String> iterator = hashMap.iterator(); iterator.hasNext();) {
-					String key = (String) iterator.next();
-					LOGGER.fine("posLocal + " + posLocal + " key: " + key);
-					// TODO
-					// sendMessages.sendPut(address, new DHT_Map(key, DHTTables.get(posLocal).get(key)), true);
-				}
-			}
-		}
-	}
-	
+		
 	public boolean isQuorum() {
 		return isQuorum;
 	}
@@ -660,24 +569,19 @@ public class zkMember implements Watcher {
 		return false;
 	}
 		
-	public void putDHTServers(HashMap<Integer, String> newDHTServers, HashMap<Integer, DHTUserInterface> newDHTTables) {
+	public void putDHTServers(HashMap<Integer, String> newDHTServers) {
 		HashMap<Integer, String> DHTServers = tableManager.getDHTServers();
 		HashMap<Integer, DHTUserInterface> DHTTables = tableManager.getDHTTables();
 		for (int i = 0; i < nServersMax; i++) {
 			if (newDHTServers.get(i) != null) {
 				DHTServers.put(i, newDHTServers.get(i));
-				DHTTables.put(i, newDHTTables.get(i));
+				DHTTables.put(i, new DHTHashMap());
 				this.nServers++;
 			}
 		}
 		LOGGER.fine(tableManager.printDHTServers());
 	}
 
-	
-	
-
-	
-	
 
 	private void configOps() {
 		if (zk != null) {
@@ -758,6 +662,13 @@ public class zkMember implements Watcher {
 					operationLeader();
 					LOGGER.finest("Watcher operation finalizado");
 				}else {
+					if (position==0) {
+						setTablesToZnode(tableManager.getDHTTables(), dhtTables0);
+					} else if (position==1) {
+						setTablesToZnode(tableManager.getDHTTables(), dhtTables1);
+					} else {
+						setTablesToZnode(tableManager.getDHTTables(), dhtTables2);
+					}
 					System.out.println("------------------------------------Operation finished------------------------------------\n");
 					System.out.println(">>> Enter option: 1) Put. 2) Get. 3) Remove. 4) ContainKey  5) Values 7) Init 0) Exit");	
 				}
@@ -804,11 +715,14 @@ public class zkMember implements Watcher {
 				System.out.println("The leader is: " + leader);
 				
 				//TODO: Gestion de nodos cuando no son lideres hardcoded
+				
 				while(intentos < 2) {
 					//Thread.sleep(1000);
 					operationLeader();
 					intentos++;
 				}
+				
+				
 				/*
 				// Comprobamos si existe el lider
 				if (s==null) {
